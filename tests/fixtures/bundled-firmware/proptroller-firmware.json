@@ -1,0 +1,15 @@
+{
+ "version": "0.0.1",
+ "images": [
+  {
+   "fw": "generic",
+   "impl": "cpp",
+   "mcu": "esp32-devkit",
+   "board": "proptroller",
+   "file": "first-flash-esp32-devkit-0.0.1.bin",
+   "bytes": 49,
+   "sha256": "a608f93ce75826db56d8fb30b8731f4310a04b1e4a524f985f69116846b3a9d1",
+   "first_flash": true
+  }
+ ]
+}

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Studio's own window: the dispatch command, events, file dialogs and closing itself after the unsaved-changes question. Plugin frames get nothing (they talk to Studio by postMessage).",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:window:allow-destroy", "dialog:default"]
+}

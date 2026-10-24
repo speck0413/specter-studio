@@ -1,0 +1,9 @@
+# The git settings the test bridge runs with (playwright.config.ts): a made-up identity, so test commits never
+# carry anyone's real name, and local file:// repositories as remotes.
+[user]
+	name = Studio Test
+	email = studio-test@example.invalid
+[init]
+	defaultBranch = main
+[protocol "file"]
+	allow = always

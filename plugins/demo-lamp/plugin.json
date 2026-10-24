@@ -1,0 +1,7 @@
+{
+  "id": "demo-lamp",
+  "name": "Demo lamps (example device adapter)",
+  "description": "An example of a device adapter: lamps that speak a made-up MQTT protocol (demolamp/<id>/status and demolamp/<id>/cmd) appear in Studio like boards.",
+  "adapter": "adapter.html",
+  "mqtt": ["demolamp/#"]
+}

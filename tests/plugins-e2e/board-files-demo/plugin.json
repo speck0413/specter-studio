@@ -1,0 +1,4 @@
+{ "id": "board-files-demo", "name": "Demo lamp files (test)", "description": "A test extension that offers a made-up board package, a profile and a script.",
+  "board_packages": ["board-packages/demo-lamp-board.json", "board-packages/wrong-pin.json"],
+  "profiles": [{ "name": "Lamp words", "file": "profiles/lamp-words.json" }],
+  "scripts": [{ "name": "Lamp on when pressed", "file": "scripts/lamp-on.txt" }] }

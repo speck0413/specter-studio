@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Board list</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { margin: 16px; }
+  .board { border: 1px solid #8884; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+  button { font-size: 16px; min-height: 44px; padding: 0 16px; }
+  .out { display: inline-block; margin: 4px 8px 4px 0; }
+</style>
+</head>
+<body>
+<h1>Board list</h1>
+<p>An example plugin. It sees boards only through Specter Studio.</p>
+<div id="boards">Loading…</div>
+<script src="studio-plugin.js"></script>
+<script>
+  const el = document.getElementById('boards');
+  let boards = [];
+  const answers = {};
+  function draw() {
+    el.innerHTML = '';
+    if (!boards.length) el.textContent = 'No boards connected.';
+    for (const b of boards) {
+      const d = document.createElement('div');
+      d.className = 'board';
+      d.dataset.key = b.key;
+      const outs = (b.state?.outputs || []).map((o) => `<span class="out">${o.channel}: ${o.level > 0 ? 'on' : 'off'}</span>`).join('');
+      // the board's name is text, never markup (a name is whatever someone typed)
+      d.innerHTML = `<h2></h2><div>${b.online ? 'online' : 'offline'}</div><div class="outs">${outs}</div>`;
+      d.querySelector('h2').textContent = b.name;
+      const btn = document.createElement('button');
+      btn.textContent = answers[b.key] || 'Ask for its state';
+      btn.onclick = async () => {
+        const r = await studio.rpc(b.key, { op: 'state' });
+        answers[b.key] = r.ok ? `Up ${Math.round(r.result.uptime_ms / 1000)} s` : r.error.message;
+        draw(); // the list may have been drawn again meanwhile (a board came or went): show the answer on the current one
+      };
+      d.appendChild(btn);
+      const send = document.createElement('button');
+      send.textContent = answers['send:' + b.key] || 'Send a tiny test effect';
+      send.onclick = async () => {
+        try {
+          const r = await studio.sendScript(b.key, 'effect plugin test:\n  wait for trig2\n  out2 = on\n  sleep 1\n  out2 = off\n');
+          answers['send:' + b.key] = r.ok && r.result.ok ? 'Test effect sent' : 'Not sent: ' + (r.error?.message || r.result?.errors?.[0]?.message);
+        } catch (e) { answers['send:' + b.key] = 'Not sent: ' + e.message; }
+        draw();
+      };
+      d.appendChild(send);
+      el.appendChild(d);
+    }
+  }
+  studio.boards().then((b) => { boards = b; draw(); });
+  studio.subscribe((e) => {
+    if (e.kind === 'boards_changed') { studio.boards().then((b) => { boards = b; draw(); }); return; }
+    if (e.kind === 'board' && e.msg.event === 'state') {
+      const b = boards.find((x) => x.key === e.key);
+      // update the outputs in place (redrawing would replace the buttons under the pointer)
+      if (b) {
+        b.state = e.msg.data;
+        const el = document.querySelector(`.board[data-key="${CSS.escape(b.key)}"] .outs`);
+        if (el) el.innerHTML = (b.state.outputs || []).map((o) => `<span class="out">${o.channel}: ${o.level > 0 ? 'on' : 'off'}</span>`).join('');
+      }
+    }
+  });
+</script>
+</body>
+</html>

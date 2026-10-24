@@ -1,0 +1,2 @@
+{ "id": "mqtt-probe", "name": "MQTT probe (test)", "description": "A test plugin for the MQTT allowlist.",
+  "mqtt": { "subscribe": ["probe/+/status"], "publish": ["probe/+/get"], "actions": ["probe/+/fire"] } }

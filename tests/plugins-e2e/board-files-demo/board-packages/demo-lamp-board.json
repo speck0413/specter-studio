@@ -1,0 +1,13 @@
+{
+  "board_package": 1,
+  "id": "demo-lamp-board",
+  "name": "Demo lamp board",
+  "mcu": "esp32-devkit",
+  "terminals": {
+    "OUT1": { "pin": 23 },
+    "OUT2": { "pin": 22 },
+    "TRIG1": { "pin": 36, "active": "low", "pull": "board" },
+    "TRIG2": { "pin": 18, "active": "high", "pull": "board" }
+  },
+  "status_led": 2
+}

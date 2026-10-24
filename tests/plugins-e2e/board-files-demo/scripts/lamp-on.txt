@@ -1,0 +1,6 @@
+# Lamp on when pressed: the lamp on OUT1 lights for two seconds when TRIG1 is pressed.
+effect lamp:
+  wait for trig1
+  out1 = on
+  sleep 2
+  out1 = off

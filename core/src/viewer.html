@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boards: Specter Studio</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f6f5f2; --card: #fff; --text: #1d1d1d; --muted: #5f5f5f; --line: #ddd; --ok: #1b5e20; --okbg: #e8f5e9; --warn: #8a4b00; --warnbg: #fff3e0; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #121212; --card: #1e1e1e; --text: #ececec; --muted: #b0b0b0; --line: #333; --ok: #a5d6a7; --okbg: #1b3320; --warn: #ffcc80; --warnbg: #3a2a12; } }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .muted { color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; margin-top: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .card h2 { font-size: 1.15rem; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #888; flex: none; }
+  .on .dot { background: #2e7d32; }
+  .chip { display: inline-block; border-radius: 16px; padding: 3px 10px; margin: 4px 4px 0 0; font-size: .9rem; font-weight: 600; background: var(--okbg); color: var(--ok); }
+  .chip.warn { background: var(--warnbg); color: var(--warn); }
+  .outs { margin-top: 8px; font-size: .9rem; color: var(--muted); }
+  .runs { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  .runs b { font-size: 1.05rem; }
+  .total { margin-top: 12px; font-size: 1.1rem; }
+</style>
+</head>
+<body>
+<h1>Boards</h1>
+<div class="muted" id="status" role="status">Connecting…</div>
+<div class="total" id="total" data-testid="fleet-tonight"></div>
+<div class="grid" id="grid" aria-label="Boards"></div>
+<script>
+  const grid = document.getElementById('grid');
+  const status = document.getElementById('status');
+  const total = document.getElementById('total');
+  const num = (v) => typeof v === 'number';
+  // "2 min ago (21:04)"
+  function when(t) {
+    if (!num(t)) return 'not yet';
+    const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    const rel = s < 10 ? 'just now' : s < 60 ? `${s} s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.floor(s / 3600)} h ago`;
+    return `${rel} (${new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+  }
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function draw(d) {
+    status.textContent = `Shared from Specter Studio (view only) · updated ${new Date().toLocaleTimeString()}`;
+    grid.innerHTML = d.boards.length ? '' : '<p>No boards yet.</p>';
+    const counted = d.boards.filter((b) => num(b.runs_tonight));
+    total.textContent = counted.length ? `Runs tonight, all boards: ${counted.reduce((n, b) => n + b.runs_tonight, 0)}` : '';
+    for (const b of d.boards) {
+      const c = document.createElement('section');
+      c.className = 'card' + (b.online ? ' on' : '');
+      c.dataset.board = b.name;
+      const outs = (b.outputs || []).filter((o) => o.level > 0).map((o) => esc(o.channel)).join(', ');
+      c.innerHTML = `<h2><span class="dot" aria-hidden="true"></span>${esc(b.name)}</h2>
+        <div class="muted state">${b.online ? 'Online' : 'Offline'}${b.kind ? ' · ' + esc(b.kind) : ''}</div>
+        ${b.firmware ? `<span class="chip${b.firmware_warn ? ' warn' : ''}">${esc(b.firmware)}</span>` : ''}
+        ${b.script ? `<span class="chip${b.script_warn ? ' warn' : ''}">${esc(b.script)}</span>` : ''}
+        <div class="outs">${outs ? 'On now: ' + outs : 'Everything off'}</div>
+        ${num(b.runs_tonight) ? `<div class="runs"><span>Runs tonight <b class="tonight">${b.runs_tonight}</b></span><span>Lifetime runs <b>${num(b.runs_lifetime) ? b.runs_lifetime.toLocaleString() : '-'}</b></span>${b.last_run !== undefined ? `<span>Last triggered <b>${esc(when(b.last_run))}</b></span>` : ''}</div>` : ''}`;
+      grid.appendChild(c);
+    }
+  }
+  const es = new EventSource('feed');
+  es.onmessage = (m) => draw(JSON.parse(m.data));
+  es.onerror = () => { status.textContent = 'Lost the connection to Specter Studio: trying again…'; };
+</script>
+</body>
+</html>

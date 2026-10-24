@@ -1,0 +1,8 @@
+{
+  "id": "board-list",
+  "name": "Board list (example plugin)",
+  "description": "An example of a plugin: every board, its outputs, and a button that runs a board's first show.",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "icons": [{ "name": "lantern", "label": "Lantern", "file": "icons/lantern.svg" }]
+}

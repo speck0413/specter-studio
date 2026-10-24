@@ -1,0 +1,302 @@
+# Specter Studio installers for Windows, macOS and Linux, built natively on GitHub's runners (Tauri cannot
+# build macOS apps on Linux, and its Windows cross build is NSIS-only and needs the Microsoft SDK licence).
+# Unsigned by default; see docs/BUILDING.md for the signing secrets. The installers are workflow artifacts; a
+# pushed v* tag also puts them on that tag's GitHub release (a pre-release when the tag has a "-", e.g. -rc.2). The e2e job runs the
+# Playwright tests (tests/e2e) against the real bridge and simulated boards in Chrome. The firmware submodule comes
+# from the public firmware repository (scripts/ci-firmware-submodule.sh, docs/BUILDING.md). Action versions are pinned by commit SHA (tag in the comment).
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  PLATFORMIO_VERSION: '6.2.0'
+
+jobs:
+  test:
+    name: tests (Linux)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Firmware submodule (public repository)
+        run: ./scripts/ci-firmware-submodule.sh # not recursive: the firmware's own aieda submodule is not needed
+      - name: Linux packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
+            libdbus-1-dev pkg-config libclang-dev
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          cache: npm
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: '. -> target'
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/firmware/arduino/platformio.ini') }}
+      - name: PlatformIO
+        run: pip install "platformio==$PLATFORMIO_VERSION"
+      - run: npm ci
+      - name: npm test (effect blocks, language, C++ preview)
+        run: npm test
+      - name: Frontend build (the Tauri crate embeds dist/)
+        run: npm run build
+      - name: Simulated board
+        run: ./scripts/build-sim.sh
+      - name: cargo test (device layer against the real simulated board; includes a real firmware build)
+        run: cargo test --workspace
+
+  e2e:
+    name: e2e (Playwright, Chrome, Linux)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Firmware submodule (public repository)
+        run: ./scripts/ci-firmware-submodule.sh
+      - name: Linux packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
+            libdbus-1-dev pkg-config libclang-dev
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          cache: npm
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: '. -> target'
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/firmware/arduino/platformio.ini') }}
+      - name: PlatformIO
+        run: pip install "platformio==$PLATFORMIO_VERSION"
+      - run: npm ci
+      - name: Simulated board
+        run: ./scripts/build-sim.sh
+      - name: Bridge (built before the tests so its first start fits the web server timeout)
+        run: cargo build -q -p studio-core --bin bridge
+      - name: Playwright (tests/e2e; Google Chrome from the runner image)
+        env:
+          CHROMIUM: /usr/bin/google-chrome
+        # --retries=1: the tests drive real simulated boards and a real bridge with wall-clock waits, so a test
+        # that passes on its second try is reported as "flaky" in the summary instead of failing the job; a test
+        # that fails twice still fails it. The installers do not wait for this job.
+        run: npx playwright test --retries=1 --reporter=line
+      - name: Playwright traces and screenshots (on failure)
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-test-results
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  installers:
+    name: installers (${{ matrix.name }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64
+            os: ubuntu-22.04 # the oldest supported glibc, so the .deb and AppImage run on more systems
+            target: x86_64-unknown-linux-gnu
+            bundles: deb,appimage
+            sim: true
+          - name: Windows x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis,msi
+            sim: false # the simulator has no Windows network layer yet (see docs/BUILDING.md)
+          - name: macOS Apple silicon
+            os: macos-latest
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+            sim: true
+          - name: macOS Intel
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+            bundles: app,dmg
+            sim: true
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Firmware submodule (public repository)
+        run: ./scripts/ci-firmware-submodule.sh
+      - name: Wiring guides from the firmware repository (when the GUIDES_REF variable names a branch)
+        if: vars.GUIDES_REF != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/specter-proptroller
+          ref: ${{ vars.GUIDES_REF }}
+          path: firmware-guides
+          sparse-checkout: docs/wiring-guides/html
+          persist-credentials: false
+      # libclang: core builds the C littlefs with bindgen (docs/BUILDING.md). Windows runners have LLVM installed,
+      # macOS runners Xcode's libclang, Linux gets libclang-dev with the packages below
+      - name: libclang for bindgen (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          if [ ! -f "C:/Program Files/LLVM/bin/libclang.dll" ]; then choco install -y llvm; fi
+          echo "LIBCLANG_PATH=C:/Program Files/LLVM/bin" >> "$GITHUB_ENV"
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
+            libdbus-1-dev pkg-config xdg-utils libclang-dev
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          cache: npm
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: '. -> target'
+          key: ${{ matrix.target }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: matrix.sim
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: matrix.sim
+        with:
+          path: ~/.platformio
+          key: pio-sim-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('firmware/firmware/arduino/platformio.ini') }}
+      - run: npm ci
+      - name: npm test
+        run: npm test
+      - name: Simulated board (sidecar named for ${{ matrix.target }})
+        if: matrix.sim
+        run: |
+          pip install "platformio==$PLATFORMIO_VERSION"
+          SIM_TARGET=${{ matrix.target }} ./scripts/build-sim.sh
+      - name: Bundle without the simulator
+        if: '!matrix.sim'
+        run: |
+          echo '{ "bundle": { "externalBin": [] } }' > src-tauri/tauri.nosim.conf.json
+          echo "::warning::${{ matrix.name }}: no practice board in this installer (the simulator does not build on Windows yet)"
+      - name: Generic firmware that comes with Studio (ESP32, Pico W, Pico 2 W)
+        run: |
+          mkdir -p src-tauri/bundled-firmware
+          if command -v pio >/dev/null 2>&1; then python3 scripts/bundle-firmware.py --pico
+          else echo "none" > src-tauri/bundled-firmware/none.txt; echo "::warning::${{ matrix.name }}: no PlatformIO here, so no bundled firmware in this installer"; fi
+      - name: Wiring guides into the bundle
+        run: |
+          rm -rf src-tauri/guides && mkdir -p src-tauri/guides
+          for g in firmware-guides/docs/wiring-guides/html firmware/docs/wiring-guides/html; do
+            if [ -f "$g/index.html" ]; then cp -r "$g"/. src-tauri/guides/; echo "wiring guides from $g"; exit 0; fi
+          done
+          echo "<!doctype html><title>Wiring guides</title><p>The wiring guides are not installed.</p>" > src-tauri/guides/missing.txt
+          echo "::warning::no wiring guides (set the GUIDES_REF repository variable, or pin a firmware commit that has them)"
+      - name: Signing secrets (only those that are set)
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # an empty APPLE_CERTIFICATE would make the bundler try to import it, so only set what exists
+          for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -n "${!v}" ]; then
+              { echo "$v<<EOF_$v"; printf '%s\n' "${!v}"; echo "EOF_$v"; } >> "$GITHUB_ENV"
+            fi
+          done
+          # unsigned macOS apps are ad-hoc signed ("-") so they launch on Apple silicon after "Open anyway"
+          if [ "$RUNNER_OS" = macOS ] && [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+          fi
+      - name: Tauri build
+        id: tauri
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          # no tagName / releaseId: build only, nothing is published
+          args: >-
+            --config src-tauri/tauri.bundle.conf.json
+            ${{ !matrix.sim && '--config src-tauri/tauri.nosim.conf.json' || '' }}
+            --target ${{ matrix.target }}
+            --bundles ${{ matrix.bundles }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: specter-studio-${{ matrix.target }}
+          # the Cargo workspace is the repository root, so bundles land in target/, not src-tauri/target/
+          path: |
+            target/${{ matrix.target }}/release/bundle/deb/*.deb
+            target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+            target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            target/${{ matrix.target }}/release/bundle/msi/*.msi
+            target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: release (tags only)
+    needs: installers
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Installers from this run onto the tag's release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --dir dist
+          mkdir -p out
+          find dist -type f \( -name '*.deb' -o -name '*.AppImage' -o -name '*.exe' -o -name '*.msi' -o -name '*.dmg' \) \
+            -exec cp {} out/ \;
+          (cd out && sha256sum -- * > SHA256SUMS.txt && ls -l)
+          pre=""; case "$TAG" in *-*) pre="--prerelease";; esac
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/* --clobber
+          else
+            gh release create "$TAG" out/* $pre --verify-tag --title "Specter Studio $TAG" \
+              --notes "Installers for Windows, macOS (Apple silicon and Intel) and Linux, built by the build workflow. Unsigned: see docs/BUILDING.md for the first-launch steps."
+          fi

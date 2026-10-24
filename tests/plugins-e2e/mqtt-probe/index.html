@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset="utf-8"><title>MQTT probe</title></head><body>
+<button id="sub">Subscribe</button> <button id="subout">Subscribe outside</button>
+<button id="get">Publish get</button> <button id="fire">Publish fire</button> <button id="out">Publish outside</button>
+<pre id="log" aria-label="Probe log"></pre>
+<script src="studio-plugin.js"></script>
+<script>
+  const log = (s) => { document.getElementById('log').textContent += s + '\n'; };
+  const tryIt = async (name, p) => { try { await p; log(name + ': ok'); } catch (e) { log(name + ': refused (' + e.message + ')'); } };
+  document.getElementById('sub').onclick = () => tryIt('subscribe', studio.mqttSubscribe('probe/+/status', (m) => log(`message ${m.topic} ${m.payload} retained=${m.retained}`)));
+  document.getElementById('subout').onclick = () => tryIt('subscribe outside', studio.mqttSubscribe('other/#', () => {}));
+  document.getElementById('get').onclick = () => tryIt('get', studio.mqttPublish('probe/a1/get', 'shots'));
+  document.getElementById('fire').onclick = () => tryIt('fire', studio.mqttPublish('probe/a1/fire', '1'));
+  document.getElementById('out').onclick = () => tryIt('outside', studio.mqttPublish('probe/a1/restart', '1'));
+</script></body></html>

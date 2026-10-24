@@ -1,0 +1,28 @@
+[package]
+name = "studio-core"
+description = "Specter Studio's device layer: discovery, connections (WebSocket, USB serial), the bundled simulator, fleet updates, backups, flash plans"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "sync", "io-util", "process", "signal"] }
+tokio-tungstenite = "0.24"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] } # objects keep their order (a board package's defaults apply in the author's order)
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+mdns-sd = "0.11"
+serialport = { version = "4", default-features = false }
+sha2 = "0.10"
+hex = "0.4"
+ring = "0.17"
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust", "apple-native", "windows-native"] }
+rumqttd = { version = "0.20.0", default-features = false }
+rumqttc = "0.25.1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+dunce = "1.0.5" # canonical paths without Windows' \\?\ prefix (PlatformIO cannot use those)
+littlefs2-sys = "0.4" # the C littlefs (with bindings), for the board package file system image of a USB install (fsimage.rs)
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }

@@ -1,0 +1,133 @@
+{
+  "about": "Effect-script icon and colour comments (src/props/look.ts, core/src/library.rs look): `list` is what the library list shows (the script's own, else its first effect's); `effects` each effect's own with the script's filling in. Both checkers read this table.",
+  "cases": [
+    {
+      "name": "no look lines",
+      "text": "effect a:\n  wait for trig1\n  out1 = on\n",
+      "list": {},
+      "effects": {
+        "a": {}
+      }
+    },
+    {
+      "name": "header directly on top of the first effect is that effect's",
+      "text": "# The prop.\n# icon: splat\n# color: red\neffect fire:\n  wait for trig1\n  sleep 1\n\n# icon: drop\n# color: blue\neffect prime:\n  wait for trig2\n  sleep 1\n",
+      "list": {
+        "icon": "splat",
+        "color": "red"
+      },
+      "effects": {
+        "fire": {
+          "icon": "splat",
+          "color": "red"
+        },
+        "prime": {
+          "icon": "drop",
+          "color": "blue"
+        }
+      }
+    },
+    {
+      "name": "script defaults apart from the first effect",
+      "text": "# icon: skull\n# color: purple\n\n# icon: ghost\neffect one:\n  wait for trig1\neffect two:\n  wait for trig2\n",
+      "list": {
+        "icon": "skull",
+        "color": "purple"
+      },
+      "effects": {
+        "one": {
+          "icon": "ghost",
+          "color": "purple"
+        },
+        "two": {
+          "icon": "skull",
+          "color": "purple"
+        }
+      }
+    },
+    {
+      "name": "hex colour, case and spacing",
+      "text": "#Icon :  Bat   # night\n#  COLOUR=#C00000\n\neffect Porch  Light:\n  wait for trig1\n",
+      "list": {
+        "icon": "bat",
+        "color": "#c00000"
+      },
+      "effects": {
+        "porch light": {
+          "icon": "bat",
+          "color": "#c00000"
+        }
+      }
+    },
+    {
+      "name": "short hex; a bad hex is no colour",
+      "text": "# color: #f80\n\n# color: #12345\neffect a:\n  wait for trig1\n",
+      "list": {
+        "color": "#f80"
+      },
+      "effects": {
+        "a": {
+          "color": "#f80"
+        }
+      }
+    },
+    {
+      "name": "a blank line breaks the effect's block; the last line of a kind wins for an effect",
+      "text": "effect a:\n  wait for trig1\n# icon: star\n\n# icon: bell\n# icon: eye\neffect b:\n  wait for trig2\n",
+      "list": {},
+      "effects": {
+        "a": {},
+        "b": {
+          "icon": "eye"
+        }
+      }
+    },
+    {
+      "name": "unknown names stay as written (drawn as play)",
+      "text": "# icon: unicorn\n\neffect a:\n  wait for trig1\n",
+      "list": {
+        "icon": "unicorn"
+      },
+      "effects": {
+        "a": {
+          "icon": "unicorn"
+        }
+      }
+    },
+    {
+      "name": "Windows line endings and effect1",
+      "text": "# icon: fog\r\n\r\n# icon: lightning\r\neffect1:\r\n  wait for trig1\r\n",
+      "list": {
+        "icon": "fog"
+      },
+      "effects": {
+        "effect1": {
+          "icon": "lightning"
+        }
+      }
+    },
+    {
+      "name": "comments only",
+      "text": "# icon: door\n# color: orange\n",
+      "list": {
+        "icon": "door",
+        "color": "orange"
+      },
+      "effects": {}
+    },
+    {
+      "name": "phone-typed spaces (no-break) in lines and the header",
+      "text": "# icon: ghost\n\n# color: teal\neffect porch:\n  sleep 2\n  wait for trig1\n",
+      "list": {
+        "icon": "ghost",
+        "color": "teal"
+      },
+      "effects": {
+        "porch": {
+          "icon": "ghost",
+          "color": "teal"
+        }
+      }
+    }
+  ]
+}

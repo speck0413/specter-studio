@@ -1,0 +1,10 @@
+{
+  "board_package": 1,
+  "id": "demo-wrong-pin",
+  "name": "Demo lamp board with a wrong pin",
+  "mcu": "esp32-devkit",
+  "terminals": {
+    "OUT1": { "pin": 35 },
+    "TRIG1": { "pin": 36, "active": "low", "pull": "board" }
+  }
+}

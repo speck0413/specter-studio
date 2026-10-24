@@ -1,0 +1,20 @@
+[package]
+name = "specter-studio"
+description = "Specter Studio: the desktop IDE for Spectre Proptroller prop controllers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "specter_studio_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+studio-core = { path = "../core" }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread"] }

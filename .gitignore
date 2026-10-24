@@ -1,0 +1,10 @@
+node_modules/
+dist/
+target/
+src-tauri/gen/
+src-tauri/binaries/
+src-tauri/bundled-firmware/
+test-results/
+playwright-report/
+*.log
+src-tauri/guides/

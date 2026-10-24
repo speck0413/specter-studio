@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>IPC probe</title></head>
+<body><p id="out">probing</p>
+<script>
+// Tries every way a plugin frame could reach Studio's backend directly, then reports through a file request
+// (the only thing the test can see). A pass: everything blocked, and no file written.
+(async () => {
+  const r = {};
+  r.internals = typeof window.__TAURI_INTERNALS__ !== 'undefined';
+  r.tauri = typeof window.__TAURI__ !== 'undefined';
+  try { r.parent = typeof window.parent.__TAURI_INTERNALS__; } catch (e) { r.parent = 'blocked'; }
+  const body = JSON.stringify({ cmd: 'file_write', args: { folder: '/tmp', path: '/tmp/specter-ipc-probe-pwned', text: 'x' } });
+  for (const [k, url] of [['ipc_scheme', 'ipc://localhost/dispatch'], ['ipc_http', 'http://ipc.localhost/dispatch']]) {
+    try {
+      const res = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': 'application/json', 'Tauri-Callback': '1', 'Tauri-Error': '2', 'Tauri-Invoke-Key': 'x' } });
+      r[k] = 'status ' + res.status + ': ' + (await res.text()).slice(0, 80);
+    } catch (e) { r[k] = 'blocked'; }
+  }
+  // the network (B1): the plugin CSP blocks fetch and WebSocket, the prelude removes WebRTC
+  try { await fetch('http://127.0.0.1:9/exfil', { method: 'POST', body: 'x', mode: 'no-cors' }); r.net_fetch = 'sent'; } catch (e) { r.net_fetch = 'blocked'; }
+  r.net_ws = await new Promise((done) => { try { const w = new WebSocket('ws://127.0.0.1:9/'); w.onopen = () => done('open'); w.onerror = () => done('blocked'); setTimeout(() => done('blocked'), 1500); } catch (e) { done('blocked'); } });
+  r.net_rtc = typeof window.RTCPeerConnection === 'undefined' && typeof window.webkitRTCPeerConnection === 'undefined' ? 'gone' : 'present';
+  if (r.internals) {
+    try { await window.__TAURI_INTERNALS__.invoke('dispatch', { cmd: 'file_write', args: JSON.parse(body).args }); r.invoke = 'ok'; }
+    catch (e) { r.invoke = 'refused: ' + e; }
+  }
+  document.getElementById('out').textContent = JSON.stringify(r);
+  new Image().src = 'probe-done.txt?r=' + encodeURIComponent(JSON.stringify(r));
+})();
+</script></body></html>

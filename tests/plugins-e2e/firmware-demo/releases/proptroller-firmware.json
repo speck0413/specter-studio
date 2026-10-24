@@ -1,0 +1,33 @@
+{
+ "version": "1.0.0",
+ "images": [
+  {
+   "fw": "demo-lamp",
+   "impl": "cpp",
+   "mcu": "sim",
+   "file": "demo-lamp-sim-1.0.0.bin",
+   "bytes": 49,
+   "sha256": "73ac8f2dc669d62eb6474120789f3797b27c9cc9b199c1279e3dd5cd6a66241d"
+  },
+  {
+   "fw": "demo-lamp",
+   "impl": "cpp",
+   "mcu": "esp32-devkit",
+   "file": "first-flash-demo-lamp-esp32-devkit-1.0.0.bin",
+   "bytes": 45,
+   "sha256": "fd39edc00e6b902c9ad1d5aaab3229e69e78eac1b6fd4c29ab3824fe3a6de445",
+   "first_flash": true
+  },
+  {
+   "fw": "demo-lamp",
+   "impl": "cpp",
+   "mcu": "esp32-devkit",
+   "board": "demo-lamp-board",
+   "board_name": "Demo lamp board",
+   "file": "first-flash-demo-lamp-board-esp32-devkit-1.0.0.bin",
+   "bytes": 61,
+   "sha256": "873eb7d0a2ee5a055784eb147008150185eae6e639eb81d02664dab227830af7",
+   "first_flash": true
+  }
+ ]
+}

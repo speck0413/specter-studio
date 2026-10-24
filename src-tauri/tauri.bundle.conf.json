@@ -1,0 +1,18 @@
+{
+  "bundle": {
+    "externalBin": [
+      "binaries/proptroller-sim"
+    ],
+    "resources": {
+      "../firmware/firmware/arduino/lib/": "firmware/arduino/lib/",
+      "../firmware/firmware/arduino/workspace-template/": "firmware/arduino/workspace-template/",
+      "../firmware/firmware/arduino/tools/": "firmware/arduino/tools/",
+      "../firmware/firmware/arduino/src/picoboot/": "firmware/arduino/src/picoboot/",
+      "../firmware/firmware/arduino/platformio.ini": "firmware/arduino/platformio.ini",
+      "../firmware/firmware/partitions/": "firmware/partitions/",
+      "../firmware/firmware/show-script-examples/": "firmware/show-script-examples/",
+      "guides/": "wiring-guides/",
+      "bundled-firmware/": "bundled-firmware/"
+    }
+  }
+}

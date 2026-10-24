@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Demo lamp adapter</title></head>
+<body>
+<script src="studio-adapter.js"></script>
+<script>
+// A made-up device, to show how an adapter works. A demo lamp publishes demolamp/<id>/status (JSON:
+// {"name", "on", "brightness", "fw"}) about once a second and takes commands on demolamp/<id>/cmd
+// ({"on": true}, {"brightness": 40}, {"blink": true}, {"restart": true}).
+const lamps = {}; // id -> last status
+const echo = {};  // id -> resolve() waiting for a status that confirms a change (readback)
+
+function info(id) {
+  const s = lamps[id] || {};
+  return { name: s.name || id, kind: 'Demo lamp', fw: 'demolamp', fw_version: s.fw || '', mcu: 'demo-lamp',
+           capabilities: ['outputs', 'params'], channels: ['LAMP'], inputs: [],
+           actions: [{ key: 'blink', label: 'Blink', confirm: false }],
+           terminals: [{ id: 'LAMP', kind: 'output', label: 'the lamp' }] };
+}
+function state(id) {
+  const s = lamps[id] || {};
+  return { v: 1, outputs: [{ channel: 'LAMP', level: s.on ? (s.brightness ?? 100) * 10 : 0 }], inputs: [],
+           status: [{ key: 'brightness', value: s.brightness ?? 100 }], paused: false };
+}
+const cmd = (id, c) => adapter.mqtt.publish(`demolamp/${id}/cmd`, c);
+const ok = (result) => ({ ok: true, result });
+const no = (message, code = 'unsupported') => ({ ok: false, error: { code, message } });
+// waits until the lamp's own status shows the change (a setting is only "saved" once the device says so)
+const confirmed = (id, test) => new Promise((resolve) => {
+  const t = setTimeout(() => resolve(false), 2000);
+  echo[id] = (s) => { if (test(s)) { clearTimeout(t); delete echo[id]; resolve(true); } };
+});
+
+adapter.mqtt.subscribe('demolamp/+/status', (topic, payload) => {
+  const id = topic.split('/')[1];
+  let s; try { s = JSON.parse(payload); } catch { return; }
+  const isNew = !lamps[id];
+  lamps[id] = s;
+  adapter.device({ id, name: s.name || id, online: true, info: info(id), state: state(id), stale_ms: 2500 });
+  if (!isNew) adapter.event(id, { event: 'state', data: state(id) });
+  if (echo[id]) echo[id](s);
+});
+
+adapter.onRequest(async (id, req) => {
+  switch (req.op) {
+    case 'info': return ok({ kind: 'info', ...info(id) });
+    case 'state': return ok({ kind: 'state', ...state(id) });
+    case 'set_output':
+      cmd(id, { on: req.level !== null && req.level > 0 });
+      return ok({ kind: 'done' });
+    case 'pause': case 'stop_all':
+      cmd(id, { on: false });
+      return ok({ kind: 'done' });
+    case 'get_params':
+      return ok({ kind: 'params', params: [{ key: 'brightness', label: 'Brightness', group: 'Lamp', type: 'int', min: 0, max: 100, unit: '%' }],
+                  values: [{ key: 'brightness', value: (lamps[id] || {}).brightness ?? 100 }] });
+    case 'set_params': {
+      const v = (req.values || []).find((x) => x.key === 'brightness');
+      if (!v) return no('only brightness can be set', 'invalid');
+      const wait = confirmed(id, (s) => s.brightness === v.value);
+      cmd(id, { brightness: v.value });
+      return (await wait) ? ok({ kind: 'done' }) : no('the lamp did not confirm the new brightness', 'internal');
+    }
+    case 'action':
+      if (req.key !== 'blink') return no('no such action', 'not_found');
+      cmd(id, { blink: true });
+      adapter.event(id, { event: 'log', data: 'blink sent' });
+      return ok({ kind: 'done' });
+    case 'reboot':
+      cmd(id, { restart: true });
+      return ok({ kind: 'done' });
+    default:
+      return no(`a demo lamp does not do ${req.op}`);
+  }
+});
+</script>
+</body></html>

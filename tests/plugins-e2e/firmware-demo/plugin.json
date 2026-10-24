@@ -1,0 +1,2 @@
+{ "id": "firmware-demo", "name": "Demo firmware (test)", "description": "A test extension that adds a made-up firmware type with its own release list.",
+  "firmware": [{ "fw": "demo-lamp", "name": "Demo lamp", "source": "releases" }] }

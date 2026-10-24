@@ -1,0 +1,4 @@
+# rustup installs and picks this toolchain in this repository (CI installs the same with dtolnay/rust-toolchain)
+[toolchain]
+channel = "stable"
+profile = "minimal"
