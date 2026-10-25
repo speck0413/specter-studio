@@ -83,6 +83,10 @@ describe('what kind of board', () => {
     expect(boardKind({ kind: 'info', mcu: 'sim' })).toBe('Practice board (on this computer)');
     expect(boardKind({ kind: 'Demo lamp', mcu: 'sim' })).toBe('Demo lamp');
   });
+  it('names the bare devkits\' chips', () => {
+    expect(boardKind({ kind: 'info', mcu: 'esp32-s3' })).toBe('ESP32-S3 board');
+    expect(boardKind({ kind: 'info', mcu: 'esp32-c3' })).toBe('ESP32-C3 board');
+  });
 });
 
 describe('input tiles say what the input is doing', () => {
