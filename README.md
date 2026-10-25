@@ -14,17 +14,12 @@ board, send them to boards, keep every board up to date, and (in Advanced mode) 
   you live, then repeats it on its trigger; the take is saved as an ordinary effect script. Boards are found on the network, by address,
   through the board's own Wi-Fi, over USB, or added as practice boards that run on this computer.
 - **Your library**: one plain folder (default `Documents/Specter Studio/My Props`) with `effects/` (one effect
-  script per `.txt` file), `firmware/` (your own Arduino sketches, `<name>/<name>.ino` + `sketch.yaml`),
-  `patterns/` (LED patterns, one `.pattern.js` file each) and
+  script per `.txt` file), `firmware/` (your own Arduino sketches, `<name>/<name>.ino` + `sketch.yaml`) and
   `sounds/` (numbered 1-99 in name order; effects play them by name; one button copies them to the SD card). Copy it to a USB stick or a Dropbox /
   Google Drive / OneDrive folder; nothing else is needed. Effect scripts can also come from and be backed up to git repositories
   (Settings › Scripts repository: Get latest, Back up everything, Auto save; more sources under Advanced). Effects are edited as text and as blocks side by side,
   checked as you type by the board's own checker, tried on a practice board, and sent to one board or all boards
   running an older version.
-- **LED patterns**: small programs that colour an LED strip light by light, written in a JavaScript-like pattern
-  language, with a live preview strip (60 frames a second, the pattern's sliders and colour pickers under it) and
-  plain messages for mistakes and endless loops. Kept in the library's `patterns/` folder as `<name>.pattern.js`;
-  a pattern file (`.epe`) exported from your own controller can be imported. See `docs/DESIGN.md` (LED patterns).
 - **Icons and runs at a glance**: each effect script, and each effect in it, can have an icon and a colour (splat,
   skull, ghost, bat, lightning, fog ... picked in the editor and kept as `# icon:` / `# color:` comment lines, so
   they go to the board with the script). Board cards fill up while an effect runs, and on the Dashboard a card is
