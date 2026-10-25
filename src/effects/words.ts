@@ -18,7 +18,8 @@ export const PIXEL_COLOURS: [string, string][] = shared.COLOURS;
 /** A word's class: kw, out, in, lv (on/off), num (unit, time setting), fx (pixel effect, colour), '' (other). */
 export const classOf: (word: string) => string = shared.classOf;
 
-/** The effects that have their own colours and take none (`pixels = rainbow`). */
+/** The effects that take no colour (`pixels = rainbow`): rainbow and fire have their own, off none (SHOW-SCRIPT.md SS-X2;
+ * the board's scriptPixelColoured in script.h, whose checker rejects `pixels = fire red`). */
 export const NO_COLOUR = ['off', 'rainbow', 'fire'];
 
 /** A colour as written (`warm white`, `0xff8000`, any case and spacing) as six hex digits, or null. */
