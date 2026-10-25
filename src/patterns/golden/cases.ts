@@ -231,7 +231,7 @@ export function render(index) {
   { name: 'error-endless-top', pixels: 8, seed: SEED, source: 'var x = 0\nwhile (1) { x++ }\nexport function render(i) {}\n', steps: frames([16]) },
   { name: 'error-endless-control', pixels: 8, seed: SEED, source: 'export function triggerGo() { for (;;) {} }\nexport function render(i) { rgb(1, 0, 0) }\n', steps: [{ frame: 16 }, { control: 'triggerGo', values: [] }, { frame: 16 }] },
   { name: 'error-too-deep', pixels: 8, seed: SEED, source: 'function f(x) { return f(x + 1) }\nexport function beforeRender(d) { f(0) }\nexport function render(i) {}\n', steps: frames([16]) },
-  { name: 'error-locals', pixels: 8, seed: SEED, source: `function f(n) { var ${Array.from({ length: 40 }, (_, i) => `v${i}`).join(', ')}; if (n > 0) f(n - 1); return 0 }\nexport function render(i) { f(20) }\n`, steps: frames([16]) },
+  { name: 'error-locals', pixels: 8, seed: SEED, source: `function f(n) { var ${Array.from({ length: 60 }, (_, i) => `v${i}`).join(', ')}; if (n > 0) f(n - 1); return 0 }\nexport function render(i) { f(9) }\n`, steps: frames([16]) },
   { name: 'error-lists-grow', pixels: 8, seed: SEED, source: 'var a\nexport function beforeRender(d) { a = array(300) }\nexport function render(i) { rgb(1, 1, 1) }\n', steps: frames([16, 16, 16, 16, 16, 16, 16, 16]) },
   { name: 'error-list-literal-in-render', pixels: 100, seed: SEED, source: 'export function render(i) { var c = [i, 1, 0]; rgb(c[1], c[2], 0) }\n', steps: frames([16, 16, 16, 16, 16, 16, 16]) },
   { name: 'error-list-as-number', pixels: 8, seed: SEED, source: 'var a = [1]\nexport function render(i) { rgb(a + 1, 0, 0) }\n', steps: frames([16]) },

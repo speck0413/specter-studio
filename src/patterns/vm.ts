@@ -40,7 +40,7 @@ export interface PatternLimits {
   steps: number;
 }
 export const BOARD_LIMITS: PatternLimits = {
-  code: 4096, globals: 256, functions: 128, controls: 16, stack: 256, depth: 24, locals: 512, cells: 2048, steps: 98304,
+  code: 4096, globals: 256, functions: 128, controls: 16, stack: 256, depth: 12, locals: 512, cells: 2048, steps: 98304,
 };
 
 export interface VmOptions {
