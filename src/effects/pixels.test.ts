@@ -43,7 +43,7 @@ describe('the light the pixels block', () => {
   it('picks an effect and a colour from lists, as written', () => {
     const ws = load('effect a:\n  wait for trig1\n  pixels = Chase Warm White\n');
     const b = pixels(ws);
-    expect(menu(b, 'EFFECT').map(([, v]) => v)).toEqual(['off', 'fill', 'Chase', 'rainbow', 'flash', 'fade', 'flicker', 'comet', 'sparkle', 'breathe', 'fire', '']);
+    expect(menu(b, 'EFFECT').map(([, v]) => v)).toEqual(['off', 'fill', 'Chase', 'rainbow', 'flash', 'fade', 'flicker', 'comet', 'sparkle', 'breathe', 'fire', '', 'pattern']);
     expect(menu(b, 'COLOUR').map(([t]) => t)).toEqual(['no colour (white)', 'red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'pink', 'white', 'warm white', 'exact colour…']);
     expect(b.getField('COLOUR')!.getText()).toBe('warm white');
     b.setFieldValue('comet', 'EFFECT');

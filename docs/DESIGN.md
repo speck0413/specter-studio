@@ -220,10 +220,23 @@ Duplicate…, Delete…). Opening one shows its code (Monaco) beside a live prev
   `fadeInPixels`, `flickerPixels`, `pixelsOff` with the board's own times; comet, sparkle, breathe and fire stay a
   comment). The words (keywords, outputs, inputs, levels, units, settings, effects, colours) are the firmware's
   `firmware/web/words.js`, imported through the submodule by `src/effects/words.ts` (as `take.ts` imports take.js),
-  so the phone page and Studio colour alike. The pattern page says "Send to a board: coming".
-- **Not done.** Sending patterns to boards and `pixels = <pattern>` in scripts (the firmware's work, then a "send"
-  here); unsaved pattern edits are kept while Studio runs (going to another pattern or page loses nothing) but not
-  across a restart (effects have hot exit, patterns not yet).
+  so the phone page and Studio colour alike.
+- **Patterns on a board** (firmware PROTOCOL.md "LED patterns", SHOW-SCRIPT.md SS-X7, SS-X8). The board runs the
+  same program bytes as the preview, bit for bit: `vm.ts` is integers only (`fixed.ts`), its random numbers are 16
+  bits, its limits are the board's (`BOARD_LIMITS`), and the shared golden vectors (`firmware/pattern-golden`,
+  written from `golden/cases.ts`) are checked on both sides (`patterns.golden.test.ts`, the firmware's
+  test_pattern_vm). `encode.ts` is the byte layout. "Send to a board…" on a pattern's page offers the boards whose
+  capabilities include `patterns` (ESP32, ESP32-S3, Pico 2 W); it compiles the pattern, checks the board's limits
+  and the name rule (1-32 letters, digits, spaces and `- _ ( )`), runs it for a few frames at the board's own
+  `pixel_count` (a pattern fine at 16 lights may take too many steps at 600), and sends `put_pattern` with the
+  preview's slider and colour values (16.16); the board's answer is shown. In scripts, `pixels = pattern <name>`
+  is the light-the-pixels block with the effect "an LED pattern from a board" (its second menu lists the board's
+  patterns, then the library's), `pixels press <button>` is the "press the pattern's button" block (its menu: the
+  buttons of the patterns the script shows); typeahead offers the same after `pixels = pattern ` and
+  `pixels press `, the patterns from the board being checked with (list_patterns) and from the library
+  (`patterns/known.ts`). The clue puzzle example presses its buttons from a script.
+- **Not done.** Unsaved pattern edits are kept while Studio runs (going to another pattern or page loses nothing)
+  but not across a restart; a pattern's `export var` values are not sent; board error lines carry no line number.
 
 ## Plugins
 

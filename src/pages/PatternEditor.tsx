@@ -1,6 +1,6 @@
 // One LED pattern: its code (Monaco, the pattern language) beside a live preview strip with its controls. Save
-// keeps it in the library (patterns/<name>.pattern.js). Sending patterns to boards comes later: the compile step
-// (src/patterns/compile.ts) already makes the small portable form a board will run.
+// keeps it in the library (patterns/<name>.pattern.js); "Send to a board" puts the compiled program, with the
+// preview's control values, on a board that plays patterns (SendPattern.tsx).
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, Chip, Stack, TextField, Typography } from '@mui/material';
 import { call, rpc } from '../api';
@@ -8,7 +8,8 @@ import { useStore } from '../store';
 import CodeEditor from '../components/CodeEditor';
 import { setupMonaco } from '../effects/monaco';
 import { PATTERN_LANG } from '../patterns/language';
-import PatternPreview, { PreviewError } from '../patterns/PatternPreview';
+import PatternPreview, { loadSavedControls, PreviewError } from '../patterns/PatternPreview';
+import SendPattern from '../patterns/SendPattern';
 import { useSaveShortcut } from '../shell/save';
 import { titleOf } from '../scriptsRepo';
 
@@ -90,7 +91,7 @@ export default function PatternEditor({ name, initial, readOnly, dark, onSaved }
         <Chip size="small" variant="outlined" label="LED pattern" />
         {dirty && <Chip size="small" color="warning" label="not saved" />}
         <Box sx={{ flex: 1 }} />
-        <Typography variant="body2" color="text.secondary" data-testid="pattern-send-note">Send to a board: coming</Typography>
+        <SendPattern name={titleOf(name)} source={text} controls={() => loadSavedControls(name)} />
         {!readOnly && <Button variant="contained" onClick={() => void save()} disabled={!dirty}>Save</Button>}
       </Stack>
       {readOnly && <Alert severity="info">This pattern is in a read-only script source: changes here are for trying out and are not saved.</Alert>}

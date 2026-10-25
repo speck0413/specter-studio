@@ -37,6 +37,8 @@ const defs = [
   { type: 'ps_audio_stop', message0: 'stop the sound', previousStatement: null, nextStatement: null, colour: COLOURS.sound, tooltip: 'Stops the sound.' },
   { type: 'ps_audio_volume', message0: 'sound volume %1', args0: [{ type: 'field_ps_choice', name: 'VOLUME', kind: 'volume', text: '60%' }], previousStatement: null, nextStatement: null, colour: COLOURS.sound,
     tooltip: 'How loud the script\'s sounds play from here on: 0% (silent) to 100%.' },
+  { type: 'ps_press', message0: 'press the pattern\'s button %1', args0: [{ type: 'field_ps_choice', name: 'BUTTON', kind: 'patternbutton', text: 'clue1' }], previousStatement: null, nextStatement: null, colour: COLOURS.pixels,
+    tooltip: 'Presses a button of the LED pattern the strip shows (pixels = pattern ...): in the pattern, an export function trigger…, named by its label. A press while the strip shows something else does nothing.' },
   { type: 'ps_pixels', message0: 'light the pixels %1 %2', args0: [{ type: 'field_ps_choice', name: 'EFFECT', kind: 'pixeleffect', text: 'rainbow' }, { type: 'field_ps_choice', name: 'COLOUR', kind: 'pixelcolour', text: '' }], previousStatement: null, nextStatement: null, colour: COLOURS.pixels,
     tooltip: 'Lights the LED strip with an effect and a colour until another pixels line. rainbow and fire have their own colours. To colour every light your own way, write an LED pattern in Your library.' },
   // tell <board> <effect> / tell <board> <setting> = <value> (SHOW-SCRIPT.md §11): the firmware's own block (web/blocks.js
@@ -50,7 +52,7 @@ const defs = [
 ];
 const FIELDS = {
   ps_effect: ['NAME'], ps_wait: ['INPUT'], ps_set: ['TARGET', 'LEVEL'], ps_sleep: ['TIME'], ps_fade: ['TARGET', 'LEVEL', 'TIME'],
-  ps_flicker: ['TARGET', 'TIME'], ps_pulse: ['TARGET', 'TIME'], ps_limit: ['RUNS', 'TIME'], ps_audio_single: ['SOUND'], ps_audio_loop: ['SOUND'], ps_audio_stop: [], ps_audio_volume: ['VOLUME'], ps_pixels: ['EFFECT', 'COLOUR'], ps_tell: ['BOARD', 'DO'], ps_comment: ['TEXT'], ps_raw: ['TEXT'],
+  ps_flicker: ['TARGET', 'TIME'], ps_pulse: ['TARGET', 'TIME'], ps_limit: ['RUNS', 'TIME'], ps_audio_single: ['SOUND'], ps_audio_loop: ['SOUND'], ps_audio_stop: [], ps_audio_volume: ['VOLUME'], ps_pixels: ['EFFECT', 'COLOUR'], ps_press: ['BUTTON'], ps_tell: ['BOARD', 'DO'], ps_comment: ['TEXT'], ps_raw: ['TEXT'],
 };
 
 // ---------------------------------------------------------------- one line → kind and fields
@@ -129,6 +131,9 @@ export function parse(raw) {
   // pixels = <effect> <colour> (SHOW-SCRIPT.md SS-X1); `pixels red` without "=" is left for Check to explain
   if ((r = kw(low, 'pixels')) !== null) {
     const v = r.trim();
+    // pixels press <button> (SS-X8)
+    const pr = /^press(?:\s+(.*))?$/i.exec(v);
+    if (pr && pr[1] && pr[1].trim()) return { type: 'ps_press', f: { BUTTON: pr[1].trim() }, p };
     if (v === '' || v[0] === '=' || v[0] === ':') {
       const x = splitPixels(v.slice(1));
       return { type: 'ps_pixels', f: { EFFECT: x.effect, COLOUR: x.colour }, p };
@@ -174,6 +179,7 @@ function lineOf(type, f) {
     case 'ps_audio_stop': return 'audio_stop';
     case 'ps_audio_volume': return `audio_volume = ${f.VOLUME}`;
     case 'ps_pixels': return `pixels = ${[f.EFFECT, f.COLOUR].map((x) => (x || '').trim()).filter(Boolean).join(' ')}`.trimEnd();
+    case 'ps_press': return `pixels press ${(f.BUTTON || '').trim()}`.trimEnd();
     case 'ps_tell': return `tell ${(f.BOARD || '').trim()} ${(f.DO || '').trim()}`.trimEnd();
     case 'ps_comment': return f.TEXT ? `# ${f.TEXT}` : '';
     default: return f.TEXT || '';
@@ -325,6 +331,7 @@ export const TOOLBOX = {
     { kind: 'block', type: 'ps_audio_stop' },
     { kind: 'block', type: 'ps_audio_volume' },
     { kind: 'block', type: 'ps_pixels' },
+    { kind: 'block', type: 'ps_press' },
     { kind: 'block', type: 'ps_tell' },
     { kind: 'block', type: 'ps_comment' },
   ],

@@ -153,7 +153,7 @@ test('typeahead offers no colours after an effect that has its own (rainbow, fir
   await page.keyboard.press('Escape');
 });
 
-test('the pixels help links to LED patterns, and the pattern page says sending is coming', async () => {
+test('the pixels help links to LED patterns, and the pattern page sends to a board', async () => {
   const word = box().locator('.view-line span span').filter({ hasText: /^pixels$/ }).first();
   await word.hover();
   const hover = page.locator('.monaco-hover').filter({ hasText: 'Lights the LED strip' });
@@ -167,5 +167,5 @@ test('the pixels help links to LED patterns, and the pattern page says sending i
   await expect(page.getByTestId('library-empty')).toBeVisible();
   await expect(page.getByTestId('pattern-list')).toBeVisible();
   await page.getByTestId('pattern-list').getByRole('button', { name: 'glow' }).click();
-  await expect(page.getByTestId('pattern-send-note')).toHaveText('Send to a board: coming');
+  await expect(page.getByTestId('pattern-send')).toHaveText('Send to a board…');
 });

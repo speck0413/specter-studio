@@ -5,6 +5,7 @@
 import { getTerms, outputDims, shown, Term, Terms } from './terms';
 import { NO_COLOUR, PIXEL_COLOURS, PIXEL_EFFECTS } from './words';
 import { FleetBoard, getFleet, tellCompletions } from './fleet';
+import { buttonsFor, getKnownPatterns, getScriptText, KnownPattern } from '../patterns/known';
 
 export interface Completion {
   label: string;
@@ -40,6 +41,7 @@ export function lineStarts(): Completion[] {
     line('audio_volume', 'audio_volume = ${1:60%}', 'how loud the script\'s sounds play (0% to 100%)'),
     line('audio_stop', 'audio_stop', 'stop the sound'),
     line('pixels', 'pixels = ', 'light the LED strip: an effect, then a colour', true),
+    line('pixels press', 'pixels press ', 'press a button of the LED pattern the strip shows', true),
   ];
 }
 
@@ -105,7 +107,7 @@ export function pixelColours(): Completion[] {
 }
 
 /** What fits after `before` (the line up to the cursor). */
-export function completionsAt(before: string, terms: Terms = getTerms(), fleet: FleetBoard[] = getFleet()): Completion[] {
+export function completionsAt(before: string, terms: Terms = getTerms(), fleet: FleetBoard[] = getFleet(), patterns: KnownPattern[] = getKnownPatterns(), script = getScriptText()): Completion[] {
   const b = before.replace(/[\t  ]/g, ' ');
   if (b.includes('#')) return [];
   let m: RegExpExecArray | null;
@@ -122,6 +124,15 @@ export function completionsAt(before: string, terms: Terms = getTerms(), fleet: 
     if (loop) list.push(word('off', 'end the background sound'));
     return list;
   }
+  // pixels press <button>: the buttons of the patterns the script shows (else of every pattern Studio knows)
+  if ((m = /^\s*pixels\s+press\s+([^=:]*)$/i.exec(b))) {
+    if (/\S\s+\S*$/.test(m[1])) return [];
+    return buttonsFor(script, patterns).map((x) => ({ label: x, insert: x, snippet: false, detail: 'a button of the pattern', kind: 'word' }));
+  }
+  // pixels = pattern <name>: the patterns stored on the board being checked with, then the library's
+  if ((m = /^\s*pixels\s*[=:]\s*pattern\s+(.*)$/i.exec(b))) {
+    return patterns.map((p) => ({ label: p.name, insert: p.name, snippet: false, detail: p.where === 'board' ? 'stored on the board' : 'in Your library: send it to the board from its page', filter: p.name, kind: 'word' }));
+  }
   // pixels = <effect> <colour>: first the effects (and the colours, which fill the strip), then the colours
   if ((m = /^\s*pixels\s*[=:]\s*(.*)$/i.exec(b))) {
     const typed = m[1];
@@ -132,7 +143,7 @@ export function completionsAt(before: string, terms: Terms = getTerms(), fleet: 
       return pixelColours();
     }
     if (/\s/.test(typed.trim())) return [];
-    return [...pixelEffects(), ...pixelColours()];
+    return [...pixelEffects(), { label: 'pattern', insert: 'pattern ', snippet: false, detail: 'an LED pattern sent to the board from Studio, by its name', kind: 'word', retrigger: true }, ...pixelColours()];
   }
   // a number in a time: its unit
   if (AFTER_NUMBER.test(b)) return units();

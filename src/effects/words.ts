@@ -35,6 +35,7 @@ export function colourHex(c: string): string | null {
 export function splitPixels(rest: string): { effect: string; colour: string } {
   const t = rest.trim();
   const m = /^(\S+)(\s+(.*))?$/.exec(t);
-  if (m && PIXEL_EFFECTS.includes(m[1].toLowerCase())) return { effect: m[1], colour: (m[3] ?? '').trim() };
+  // `pixels = pattern <name>`: an LED pattern stored on the board (SS-X7); the name sits where a colour would
+  if (m && (PIXEL_EFFECTS.includes(m[1].toLowerCase()) || m[1].toLowerCase() === 'pattern')) return { effect: m[1], colour: (m[3] ?? '').trim() };
   return { effect: '', colour: t };
 }

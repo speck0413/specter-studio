@@ -44,7 +44,7 @@ const blank = (raw: string) => !raw.replace(/[\t  ]/g, ' ').split('#')[0].tri
 const KIND: Record<string, string> = {
   wait_for: 'ps_wait', set: 'ps_set', sleep: 'ps_sleep', fade: 'ps_fade', flicker: 'ps_flicker',
   audio_single: 'ps_audio_single', audio_loop: 'ps_audio_loop', audio_stop: 'ps_audio_stop', pulse: 'ps_pulse', audio_loop_off: 'ps_audio_loop',
-  audio_volume: 'ps_audio_volume', pixels: 'ps_pixels', tell: 'ps_tell',
+  audio_volume: 'ps_audio_volume', pixels: 'ps_pixels', tell: 'ps_tell', pixels_press: 'ps_press',
 };
 // the advanced line that adds no step (SHOW-SCRIPT.md): its block
 const DECL = /^\s*limit\b/i;

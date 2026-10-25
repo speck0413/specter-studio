@@ -21,6 +21,8 @@ function loadSaved(id: string): { controls: Record<string, number[]>; vars: Reco
   } catch { /* a private window or blocked storage: start fresh */ }
   return { controls: {}, vars: {} };
 }
+/** The control values the preview keeps for a pattern (what "Send to a board" sends with it). */
+export const loadSavedControls = (id: string) => loadSaved(id).controls;
 function keepSaved(id: string, s: { controls: Record<string, number[]>; vars: Record<string, number> }) {
   try { localStorage.setItem(storeKey(id), JSON.stringify(s)); } catch { /* not kept */ }
 }

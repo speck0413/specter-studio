@@ -5,9 +5,10 @@
 import * as Blockly from 'blockly';
 import { dimsId, findTerm, getTerms, outputDims, shown, Term } from './terms';
 import { colourHex, NO_COLOUR, PIXEL_COLOURS, PIXEL_EFFECTS } from './words';
+import { buttonsFor, getKnownPatterns, getScriptText, patternWords } from '../patterns/known';
 
 type Option = [string, string];
-type ChoiceKind = 'input' | 'output' | 'dimmable' | 'level' | 'volume' | 'sound' | 'loop' | 'pixeleffect' | 'pixelcolour';
+type ChoiceKind = 'input' | 'output' | 'dimmable' | 'level' | 'volume' | 'sound' | 'loop' | 'pixeleffect' | 'pixelcolour' | 'patternbutton';
 type PopupKind = 'time' | 'runs';
 
 // menu items that open a small editor instead of being a value
@@ -15,6 +16,7 @@ const LEVEL = '\u0000level';
 const DMX = '\u0000dmx';
 const NUMBER = '\u0000number';
 const EXACT = '\u0000exact';
+const NAME = '\u0000name';
 
 const unknownNote = (what: 'terminal' | 'sound' | 'setting') => {
   const t = getTerms();
@@ -197,8 +199,13 @@ function baseOptions(kind: ChoiceKind, field: Blockly.Field<any>): Option[] {
     case 'volume': return [['100%', '100%'], ['off (silent)', 'off'], ['level…', LEVEL]];
     case 'sound': return [...t.sounds.map(soundOption), ['another number…', NUMBER]];
     case 'loop': return [...t.sounds.map(soundOption), ['off (no background sound)', 'off'], ['another number…', NUMBER]];
-    case 'pixeleffect': return [...PIXEL_EFFECTS.map((e): Option => [e, e]), ['colour only (fills the strip)', '']];
+    case 'pixeleffect': return [...PIXEL_EFFECTS.map((e): Option => [e, e]), ['colour only (fills the strip)', ''], ['an LED pattern from a board', 'pattern']];
+    case 'patternbutton': {
+      // the buttons of the patterns the script shows, when Studio knows them (the board's, the library's)
+      return [...buttonsFor(getScriptText()).map((b): Option => [b, b]), ['another button…', NAME]];
+    }
     case 'pixelcolour': {
+      if (effectOf(field).trim().toLowerCase() === 'pattern') return [...getKnownPatterns().map((p): Option => [p.where === 'board' ? p.name : `${p.name} (in Your library)`, p.name]), ['another pattern…', NAME]];
       // rainbow and fire have their own colours, off none (SS-X2): the menu offers no colour for them
       const effect = effectOf(field).trim().toLowerCase();
       if (NO_COLOUR.includes(effect)) return [[effect === 'off' ? 'no colour (dark)' : 'its own colours', '']];
@@ -234,6 +241,11 @@ export function choiceOptions(kind: ChoiceKind, field: Blockly.Field<any>, value
   }
   // pixel effects and colours: any case and spacing take their entry's place (`Sparkle`, `Warm  White`); an exact
   // colour is shown as written; anything else is kept and marked
+  if (kind === 'patternbutton' || (kind === 'pixelcolour' && effectOf(field).trim().toLowerCase() === 'pattern')) {
+    const i = base.findIndex(([, v]) => v !== NAME && v === patternWords(value));
+    if (i >= 0) { const copy = base.slice(); copy[i] = [base[i][0], value]; return copy; }
+    return [[value.trim() || '…', value], ...base];
+  }
   if (kind === 'pixeleffect' || kind === 'pixelcolour') {
     // a colour written after an effect that takes none (`pixels = fire red`): kept, and marked as the board's
     // checker says it
@@ -293,6 +305,12 @@ export class ChoiceField extends Blockly.FieldDropdown {
   }
   protected onItemSelected_(menu: Blockly.Menu, item: Blockly.MenuItem) {
     const v = item.getValue();
+    if (v === NAME) {
+      Blockly.DropDownDiv.hideIfOwner(this as any, true);
+      const what = this.kind === 'patternbutton' ? 'The button (its label in Studio, for example clue1)' : 'The pattern\'s name, as the board keeps it';
+      setTimeout(() => Blockly.dialog.prompt(what, this.getValue() ?? '', (t) => { if (t !== null && t.trim()) this.setValue(t.trim()); }), 0);
+      return;
+    }
     if (v === LEVEL || v === DMX || v === NUMBER || v === EXACT) {
       Blockly.DropDownDiv.hideIfOwner(this as any, true);
       setTimeout(() => (v === LEVEL ? levelPopup(this as any) : v === EXACT ? colourPopup(this as any) : this.openNumber(v === DMX)), 0);

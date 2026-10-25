@@ -13,6 +13,8 @@ import { keepOneIndent, LANG_ID, markersFromCheck } from './language';
 import BlocksView, { BlocksApi } from './BlocksView';
 import { setTerms, Sound, soundList, termsFor } from './terms';
 import { fleetFrom, setFleet } from './fleet';
+import { boardPatterns, buttonsOf, KnownPattern, mergeKnown, patternWords, setKnownPatterns, setScriptText } from '../patterns/known';
+import { titleOf } from '../scriptsRepo';
 import { editorView, showsBlocks, showsScript } from '../editorView';
 import { checkHint } from '../words';
 import { GOTO_LINE } from '../components/actions';
@@ -122,6 +124,29 @@ export default function ScriptEditor({ text, onChange, dark, gotoName, checkWith
     const boardSounds = soundList((termsBoard?.script as any)?.sounds);
     setTerms(termsFor(termsBoard?.info, profile, soundNames.length ? soundNames : boardSounds));
   }, [termsBoard?.info, profile, soundNames, termsBoard?.script]);
+
+  // the LED patterns a pixels line can name and their buttons (patterns/known.ts): the board being checked with
+  // (its stored patterns), then the library's
+  useEffect(() => setScriptText(text), [text]);
+  const [libPatterns, setLibPatterns] = useState<KnownPattern[]>([]);
+  useEffect(() => {
+    if (!prefs.workspace) return;
+    let live = true;
+    call('pattern_list', { folder: prefs.workspace }).then(async (list: any[]) => {
+      const out: KnownPattern[] = [];
+      for (const p of list || []) {
+        try { out.push({ name: patternWords(titleOf(p.name)), buttons: buttonsOf(await call('pattern_read', { folder: prefs.workspace, name: p.name })), where: 'library' }); } catch { /* skipped */ }
+      }
+      if (live) setLibPatterns(out);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [prefs.workspace, store.libraryVersion]);
+  const [boardPats, setBoardPats] = useState<KnownPattern[]>([]);
+  useEffect(() => {
+    setBoardPats([]);
+    if (checkKey && termsBoard?.info?.capabilities?.includes('patterns')) rpc(checkKey, { op: 'list_patterns' }).then((r: any) => setBoardPats(boardPatterns(r?.result?.patterns))).catch(() => {});
+  }, [checkKey, termsBoard?.info, termsBoard?.paramsSeq]);
+  useEffect(() => setKnownPatterns(mergeKnown(boardPats, libPatterns)), [boardPats, libPatterns]);
 
   // the other boards a tell line can name, their effects and the settings they take (fleet.ts): set only when that
   // list changes; each board's settings are read once, and again after they changed (paramsSeq)
