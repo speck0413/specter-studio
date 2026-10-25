@@ -133,7 +133,7 @@ test('the Sound tile plays, repeats, stops and sets the volume for now', async (
   await expect(tile.getByTestId('sound-now')).toHaveText('Nothing playing.', { timeout: 10_000 });
   // no card list in the library: one sound number (sound 1 is the card's mp3/0001-….mp3)
   await expect(tile.getByRole('spinbutton', { name: 'Sound number' })).toHaveValue('1');
-  await expect(tile).not.toContainText(/folder \d|track/i);
+  await expect(tile.getByRole('spinbutton', { name: /folder|track/i })).toHaveCount(0);
   await tile.getByRole('button', { name: 'Play on repeat' }).click();
   await expect(tile.getByTestId('sound-now')).toHaveText(/^Playing sound 1 on repeat/, { timeout: 10_000 });
   await tile.getByRole('button', { name: 'Stop sound' }).click();

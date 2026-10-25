@@ -260,7 +260,7 @@ export class ChoiceField extends Blockly.FieldDropdown {
       countPopup(this, 'DMX channel', 'DMX channel', { min: '1', max: '512', step: '1' }, m ? m[1] : '1', (n) => `dmx${n}`);
     } else {
       const v = (this.getValue() || '').trim();
-      countPopup(this, 'Sound number', 'Sound number', { min: '1', step: '1' }, /^\d+$/.test(v) ? v : '1', (n) => n);
+      countPopup(this, 'Sound number', 'Sound number', { min: '1', max: '99', step: '1' }, /^\d+$/.test(v) ? v : '1', (n) => n);
     }
   }
 }

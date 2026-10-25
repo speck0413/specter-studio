@@ -95,7 +95,7 @@ function SoundTile({ b, tile, heading }: { b: Board; tile: object; heading: obje
             <TextField size="small" type="number" label="Sound" value={number} onChange={(e) => setNumber(clampSound(Number(e.target.value)))}
               slotProps={{ htmlInput: { min: 1, max: SOUND_MAX, 'aria-label': 'Sound number' } }} sx={{ width: 140 }} />
           )}
-          {choices.length === 0 && <Typography variant="body2" color="text.secondary">Sound 1 is the file 0001-….mp3 in the card's mp3 folder, the same sound 1 as audio_single = 1 in an effect script. The SD card tool puts your sounds there in order.</Typography>}
+          {choices.length === 0 && <Typography variant="body2" color="text.secondary">Sound 1 is the one file in the card's folder 01 (01/001-….mp3), the same sound 1 as audio_single = 1 in an effect script. The SD card tool puts your sounds there.</Typography>}
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
             <Button variant="outlined" disabled={off} onClick={async () => { repeating.current = false; await send(soundRequest.once(n)); }}>Play once</Button>
             <Button variant="outlined" disabled={off} onClick={async () => { if (await send(soundRequest.repeat(n))) repeating.current = true; }}
