@@ -206,11 +206,9 @@ Duplicate…, Delete…). Opening one shows its code (Monaco) beside a live prev
   `indexedDB` and the like before any message arrives.
 - **Naming.** The feature is "patterns" (or "LED patterns") everywhere in Studio. Never "… compatible" with any
   product name.
-- **Licence.** Studio's compiler, interpreter, examples and test patterns are its own (MIT). PXLBLZ-IDE was checked
-  as a candidate: its licence is ISC (© 2026 Jon Chester), and it is a large web application (React, Cloudflare, a
-  vendored package). Its code was not read or used, so no notice is needed; a small interpreter written from the
-  public language description was simpler. No other pattern implementation's code, and no community pattern
-  without a licence, is in this repository.
+- **Licence.** Studio's compiler, interpreter, examples and test patterns are its own (MIT), written from the public
+  description of the pattern language. No other pattern implementation's code, and no community pattern without a
+  licence, is in this repository.
 - **Built-in pixel effects in scripts.** The show script's own `pixels = <effect> <colour>` (firmware SHOW-SCRIPT.md
   §10) is a "light the pixels" block (an effect menu: off, fill, chase, rainbow, flash, fade, flicker, comet,
   sparkle, breathe, fire, or a colour alone; a colour menu: the named colours, or "exact colour…", a colour picker

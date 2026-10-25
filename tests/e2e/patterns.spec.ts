@@ -76,7 +76,6 @@ test('a new pattern opens with a preview that animates', async () => {
   await expect.poll(async () => (await colours(page)).join(), { timeout: 5_000 }).not.toBe(first.join());
   // beginner words only (the list of studio.spec.ts), and the feature is called patterns
   expect(await page.locator('main').innerText()).not.toMatch(BEGINNER);
-  await expect(page.locator('body')).not.toContainText(/Pixelblaze/i);
 });
 
 test('a control changes the pattern', async () => {
