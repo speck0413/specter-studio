@@ -78,14 +78,38 @@ pub fn drive_chip(drive: &Path) -> Option<&'static str> {
     if id.contains("RP2350") { Some("RP2350") } else if id.contains("RP2") { Some("RP2040") } else { None }
 }
 
+/// The Python that runs PlatformIO: its own `penv` (the official installer), else the Python beside the `pio` found
+/// on PATH (PlatformIO installed with pip, as on CI or with a system package), else the one named in `pio`'s first
+/// line, else `python3` / `python`.
+pub fn pio_python() -> PathBuf {
+    let penv = pio_home().join(if cfg!(windows) { "penv/Scripts/python.exe" } else { "penv/bin/python" });
+    if penv.is_file() {
+        return penv;
+    }
+    if let Some(pio) = crate::builder::find_pio() {
+        if let Some(dir) = pio.parent() {
+            for name in if cfg!(windows) { &["python.exe"][..] } else { &["python3", "python"][..] } {
+                if dir.join(name).is_file() {
+                    return dir.join(name);
+                }
+            }
+        }
+        let first = std::fs::read(&pio).ok().and_then(|b| b.split(|&c| c == b'\n').next().map(|l| String::from_utf8_lossy(l).to_string()));
+        if let Some(py) = first.as_deref().and_then(|l| l.strip_prefix("#!")).map(str::trim).filter(|p| Path::new(p).is_file()) {
+            return PathBuf::from(py);
+        }
+    }
+    PathBuf::from(if cfg!(windows) { "python" } else { "python3" })
+}
+
+/// Where PlatformIO keeps esptool (installed with the ESP32 platform, on its first ESP32 build).
+pub fn esptool_script() -> PathBuf {
+    pio_home().join("packages/tool-esptoolpy/esptool.py")
+}
+
 /// esptool's command line for an ESP32 plan.
 pub fn esptool_command(plan: &Value, port: &str) -> Vec<String> {
-    let pio = pio_home();
-    let python = if cfg!(windows) { pio.join("penv/Scripts/python.exe") } else { pio.join("penv/bin/python") };
-    let mut c = vec![
-        python.to_string_lossy().to_string(),
-        pio.join("packages/tool-esptoolpy/esptool.py").to_string_lossy().to_string(),
-    ];
+    let mut c = vec![pio_python().to_string_lossy().to_string(), esptool_script().to_string_lossy().to_string()];
     for s in ["--chip", "esp32", "--port", port, "--baud", "460800", "--before", "default_reset", "--after", "hard_reset",
               "write_flash", "-z", "--flash_mode", "dio", "--flash_freq", "40m", "--flash_size", "4MB"] {
         c.push(s.to_string());
@@ -168,7 +192,10 @@ pub async fn run(p: Value, a: &Value) -> Result<Value, String> {
         if find_pio().is_none() {
             return Err("PlatformIO is not installed (it brings the flashing tool)".into());
         }
-        let out = tokio::process::Command::new(&cmd[0]).args(&cmd[1..]).output().await.map_err(|e| e.to_string())?;
+        if !esptool_script().is_file() {
+            return Err("flashing failed: PlatformIO has no esptool yet (it comes with the ESP32 platform: build an ESP32 firmware once)".into());
+        }
+        let out = tokio::process::Command::new(&cmd[0]).args(&cmd[1..]).output().await.map_err(|e| format!("flashing failed: cannot start Python for esptool ({}): {e}", cmd[0]))?;
         let log = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
         if !out.status.success() {
             let hint = if log.contains("Failed to connect") { "the board did not answer: hold its BOOT button while it starts, then try again" } else { "flashing failed (see the log)" };
