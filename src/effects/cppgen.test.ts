@@ -22,6 +22,13 @@ describe('effect script to C++', () => {
     expect(cpp).toContain('.setVolume(0)');
   });
 
+  it('a tell line has no step in the beginner layer: it stays as a comment', () => {
+    const cpp = scriptToCpp('effect a:\n  wait for trig1\n  tell porch blackout\n  tell all pixel_speed = 150\n  out1 = on\n');
+    expect(cpp).toContain('// not available in the C++ beginner layer: tell porch blackout');
+    expect(cpp).toContain('// not available in the C++ beginner layer: tell all pixel_speed = 150');
+    expect(cpp).toContain('.turnOn(OUT1)');
+  });
+
   it('the light-up ghost', () => {
     const cpp = scriptToCpp(fs.readFileSync(path.join(EX, '01_light_up_ghost.txt'), 'utf8'));
     expect(cpp).toContain(

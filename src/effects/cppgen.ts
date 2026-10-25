@@ -4,8 +4,8 @@
 // A `pixels` line is the library's pixel step (setPixels, chasePixels, ...); comet, sparkle, breathe and fire have
 // none, and pixel_speed is not applied (the steps take the effects' own times).
 // Lines the beginner layer has no step for (flicker, DMX, looping a named sound, a second wait for, the advanced
-// lines: limit, pulse, a time kept as a setting, a sound line above the first wait for) become comments, so
-// nothing is silently dropped.
+// lines: limit, pulse, a time kept as a setting, a sound line above the first wait for, a `tell` line to another
+// board) become comments, so nothing is silently dropped.
 
 import { colourHex, splitPixels } from './words';
 
