@@ -47,7 +47,10 @@ export interface PatternProgram {
 }
 
 export class PatternError extends Error {
-  constructor(message: string, public line = 0) { super(line ? `Line ${line}: ${message}` : message); }
+  /** the message without the line (what a board says: it is not sent the lines) */
+  readonly plain: string;
+  /** where in `code` it happened (-1: while compiling) */
+  constructor(message: string, public line = 0, public pc = -1) { super(line ? `Line ${line}: ${message}` : message); this.plain = message; }
 }
 
 export const FIX = 65536;

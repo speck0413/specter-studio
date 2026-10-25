@@ -84,4 +84,40 @@ export function render(index) {
 }
 `,
   },
+  {
+    title: 'clue puzzle',
+    text: `// A puzzle board: the strip is red until it is solved. Each clue lights its own stretch yellow, in any order,
+// and when every clue is solved the whole strip turns green. A show script presses the buttons:
+//   effect puzzle:
+//     pixels = pattern clue puzzle
+//   effect clue1:
+//     wait for trig1
+//     pixels press clue1
+var first = [0, 10, 20, 30, 40, 50]   // first light of each clue (0 = the first light)
+var last  = [9, 19, 29, 39, 49, 59]   // last light of each clue
+var solved = array(6)
+var all = 0
+
+export function triggerClue1() { solved[0] = 1 }
+export function triggerClue2() { solved[1] = 1 }
+export function triggerClue3() { solved[2] = 1 }
+export function triggerClue4() { solved[3] = 1 }
+export function triggerClue5() { solved[4] = 1 }
+export function triggerClue6() { solved[5] = 1 }
+export function triggerReset() { for (var i = 0; i < 6; i++) solved[i] = 0 }
+
+export function beforeRender(delta) {
+  all = solved.sum() == 6
+}
+
+export function render(index) {
+  if (all) { rgb(0, 1, 0); return }
+  for (var c = 0; c < 6; c++) {
+    if (solved[c] && index >= first[c] && index <= last[c]) { rgb(1, 1, 0); return }
+  }
+  rgb(1, 0, 0)
+}
+`,
+  },
 ];
+

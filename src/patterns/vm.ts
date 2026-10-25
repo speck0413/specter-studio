@@ -1,77 +1,104 @@
-// Runs a compiled pattern (compile.ts) the way a board will: every number is 16.16 fixed point (a 32-bit integer
+// Runs a compiled pattern (compile.ts) the way a board does: every number is 16.16 fixed point (a 32-bit integer
 // holding value × 65536, from -32768 to 32767.99998), so sums that overflow wrap around and the bitwise
 // operators work on the whole 32-bit word. Each frame has a budget of steps and of time: a pattern that loops
 // forever stops with a plain message instead of freezing Studio.
+//
+// The board's interpreter (the firmware's pattern_vm.cpp) does exactly what this file does, step for step and
+// bit for bit: the maths is integers only (fixed.ts), random numbers come from a 16-bit source, the clock is
+// whole milliseconds on a board, and the limits (BOARD_LIMITS) are the board's. The shared golden vectors
+// (firmware/pattern-golden, patterns.golden.test.ts) check that.
 //
 // The built-ins are written here from the public description of the pattern language; see builtins.ts for the
 // list and the ids.
 
 import { BUILTINS } from './builtins';
 import { FIX, Op, PatternError, PatternProgram, toFix } from './compile';
+import * as fx from './fixed';
+
+export { fdiv, fmul } from './fixed';
 
 export class PList { constructor(public v: Val[]) {} }
 export class PFunc { constructor(public i: number) {} }
 export type Val = number | PList | PFunc;
 
+/** What a board holds for one pattern; Studio's preview uses the same numbers, so what runs here runs there. */
+export interface PatternLimits {
+  /** code words (opcodes and their values) */
+  code: number;
+  globals: number;
+  functions: number;
+  controls: number;
+  /** values being worked on at once */
+  stack: number;
+  /** functions calling each other at once */
+  depth: number;
+  /** the values (parameters and `var`s) of every function running at once */
+  locals: number;
+  /** list values made in all while the pattern runs (lists are never given back) */
+  cells: number;
+  /** steps one frame (or one control change) may take */
+  steps: number;
+}
+export const BOARD_LIMITS: PatternLimits = {
+  code: 4096, globals: 256, functions: 128, controls: 16, stack: 256, depth: 24, locals: 512, cells: 2048, steps: 98304,
+};
+
 export interface VmOptions {
   pixelCount?: number;
-  /** steps one frame (or one control change) may take */
+  /** steps one frame (or one control change) may take (default BOARD_LIMITS.steps) */
   budget?: number;
   /** milliseconds one frame may take */
   timeLimitMs?: number;
   now?: () => number;
+  /** a random number from 0 to 1 (it is cut to 16 bits, as a board's) */
   random?: () => number;
+  /** a random whole number from 0 to 65535 (the golden vectors' source); wins over `random` */
+  random16?: () => number;
+  limits?: Partial<PatternLimits>;
 }
 
-const MAX_DEPTH = 48;
-const MAX_CELLS = 100_000;
 const CHUNK = 8192;
-export const DEFAULT_BUDGET = 4_000_000;
+export const DEFAULT_BUDGET = BOARD_LIMITS.steps;
+export const MAX_PIXELS = 4096;
 
-/** 16.16 multiply: the exact 64-bit product shifted down by 16, wrapped to 32 bits (no low bits lost). */
-export function fmul(a: number, b: number): number {
-  const ah = a >> 16, al = a & 0xffff;
-  return (ah * b + Math.floor((al * b) / FIX)) | 0;
-}
-/** 16.16 divide, rounded toward zero; dividing by zero gives the largest number of the right sign (0 / 0 is 0). */
-export function fdiv(a: number, b: number): number {
-  if (b === 0) return a > 0 ? 0x7fffffff : a < 0 ? -0x80000000 : 0;
-  return Math.trunc((a * FIX) / b) | 0;
-}
 const f = (v: number) => v / FIX;
-const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
 export class PatternVM {
   readonly prog: PatternProgram;
+  readonly limits: PatternLimits;
   globals: Val[];
-  /** milliseconds since the pattern started (time() and the waves follow it) */
+  /** milliseconds since the pattern started (time() follows it) */
   clock = 0;
   pixelCount: number;
   /** red, green, blue per light, 0 to 255 */
   out: Uint8Array;
-  private S: Val[] = new Array(4096);
+  private S: Val[];
   private sp = 0;
   private depth = 0;
+  private localsUsed = 0;
   private left = 0;
   private spent = 0;
   private budget: number;
   private deadline = 0;
   private timeLimit: number;
   private now: () => number;
-  private random: () => number;
+  private random16: () => number;
   private cells = 0;
   private seed = 0x2545f491;
   private r = 0; private g = 0; private b = 0;
 
   constructor(prog: PatternProgram, opts: VmOptions = {}) {
     this.prog = prog;
+    this.limits = { ...BOARD_LIMITS, ...(opts.limits ?? {}) };
     this.globals = new Array(prog.globals.length).fill(0);
-    this.pixelCount = Math.max(1, Math.min(4096, Math.floor(opts.pixelCount ?? 16)));
+    this.S = new Array(this.limits.stack + 4);
+    this.pixelCount = Math.max(1, Math.min(MAX_PIXELS, Math.floor(opts.pixelCount ?? 16)));
     this.out = new Uint8Array(this.pixelCount * 3);
-    this.budget = opts.budget ?? DEFAULT_BUDGET;
+    this.budget = opts.budget ?? this.limits.steps;
     this.timeLimit = opts.timeLimitMs ?? 250;
     this.now = opts.now ?? (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
-    this.random = opts.random ?? Math.random;
+    const random = opts.random ?? Math.random;
+    this.random16 = opts.random16 ?? (() => Math.floor(random() * 65536) & 0xffff);
   }
 
   /** Runs the pattern's top-level code once (its variables get their first values). */
@@ -82,7 +109,7 @@ export class PatternVM {
   }
 
   setPixelCount(n: number) {
-    this.pixelCount = Math.max(1, Math.min(4096, Math.floor(n)));
+    this.pixelCount = Math.max(1, Math.min(MAX_PIXELS, Math.floor(n)));
     this.out = new Uint8Array(this.pixelCount * 3);
     this.globals[0] = toFix(this.pixelCount);
   }
@@ -98,22 +125,28 @@ export class PatternVM {
     for (let i = 0; i < n; i++) {
       this.r = this.g = this.b = 0;
       const idx = i * FIX;
+      // i / n as 16.16, halves up (the same whole-number sum as on the board)
+      const t = Math.floor((2 * i * FIX + n) / (2 * n));
       if (e.render !== undefined) this.exec(e.render, [idx]);
-      else if (e.render2D !== undefined) this.exec(e.render2D, [idx, toFix(i / n), 0]);
-      else this.exec(e.render3D!, [idx, toFix(i / n), 0, 0]);
-      out[i * 3] = Math.round(this.r * 255);
-      out[i * 3 + 1] = Math.round(this.g * 255);
-      out[i * 3 + 2] = Math.round(this.b * 255);
+      else if (e.render2D !== undefined) this.exec(e.render2D, [idx, t, 0]);
+      else this.exec(e.render3D!, [idx, t, 0, 0]);
+      out[i * 3] = fx.channel(this.r);
+      out[i * 3 + 1] = fx.channel(this.g);
+      out[i * 3 + 2] = fx.channel(this.b);
     }
     return out;
   }
 
   /** A control was moved: calls its function with the values (0 to 1; a colour is three of them). */
   setControl(name: string, values: number[]) {
+    this.setControlFixed(name, values.map(toFix));
+  }
+  /** The same with the values already 16.16 (what a board is sent). */
+  setControlFixed(name: string, values: number[]) {
     const c = this.prog.controls.find((x) => x.name === name);
     if (!c) return;
     this.start();
-    this.exec(c.fn, values.map(toFix));
+    this.exec(c.fn, values);
   }
 
   /** An `export var`'s value, as a plain number (null for a list or a function). */
@@ -132,14 +165,15 @@ export class PatternVM {
     this.spent = 0;
     this.sp = 0;
     this.depth = 0;
+    this.localsUsed = 0;
     this.deadline = this.now() + this.timeLimit;
   }
 
   private tooLong(pc: number): never {
-    throw new PatternError('the pattern took too long on one frame and was stopped (a loop that never ends?)', this.prog.lines[pc] || 0);
+    this.fail(pc, 'the pattern took too long on one frame and was stopped (a loop that never ends?)');
   }
   private fail(pc: number, msg: string): never {
-    throw new PatternError(msg, this.prog.lines[pc] || 0);
+    throw new PatternError(msg, this.prog.lines?.[pc] || 0, pc);
   }
   private num(v: Val, pc: number): number {
     if (typeof v === 'number') return v;
@@ -149,15 +183,22 @@ export class PatternVM {
     if (v instanceof PList) return v;
     this.fail(pc, 'this needs a list (make one with array(n) or [1, 2, 3])');
   }
+  private newList(len: number, pc: number): PList {
+    if (this.cells + len > this.limits.cells) this.fail(pc, `the pattern's lists are too big (at most ${this.limits.cells} values in all: make lists once, at the top of the pattern)`);
+    this.cells += len;
+    return new PList(new Array(len).fill(0));
+  }
 
   /** Calls function `fi` with these values and returns what it gives back. */
   exec(fi: number, args: Val[]): Val {
     const prog = this.prog;
     const fn = prog.functions[fi];
-    if (++this.depth > MAX_DEPTH) { this.depth = 0; this.fail(fn.addr, `functions call each other too deeply (more than ${MAX_DEPTH} at once)`); }
+    if (++this.depth > this.limits.depth) { this.depth = 0; this.fail(fn.addr, `functions call each other too deeply (more than ${this.limits.depth} at once)`); }
+    if (this.localsUsed + fn.locals > this.limits.locals) this.fail(fn.addr, 'the pattern ran out of room for its values');
+    this.localsUsed += fn.locals;
     const L: Val[] = new Array(fn.locals);
     for (let i = 0; i < fn.locals; i++) L[i] = i < fn.params && i < args.length ? args[i] : 0;
-    const code = prog.code, S = this.S, G = this.globals;
+    const code = prog.code, S = this.S, G = this.globals, maxSp = this.limits.stack;
     let sp = this.sp;
     const base = sp;
     let pc = fn.addr;
@@ -167,7 +208,7 @@ export class PatternVM {
         this.left = CHUNK;
         if (this.spent >= this.budget || this.now() > this.deadline) this.tooLong(pc);
       }
-      if (sp > 4000) this.fail(pc, 'the pattern ran out of room for its values');
+      if (sp > maxSp) this.fail(pc, 'the pattern ran out of room for its values');
       const at = pc;
       switch (code[pc++]) {
         case Op.CONST: S[sp++] = code[pc++]; break;
@@ -181,9 +222,9 @@ export class PatternVM {
         case Op.DUP2: S[sp] = S[sp - 2]; S[sp + 1] = S[sp - 1]; sp += 2; break;
         case Op.ADD: sp--; S[sp - 1] = (this.num(S[sp - 1], at) + this.num(S[sp], at)) | 0; break;
         case Op.SUB: sp--; S[sp - 1] = (this.num(S[sp - 1], at) - this.num(S[sp], at)) | 0; break;
-        case Op.MUL: sp--; S[sp - 1] = fmul(this.num(S[sp - 1], at), this.num(S[sp], at)); break;
-        case Op.DIV: sp--; S[sp - 1] = fdiv(this.num(S[sp - 1], at), this.num(S[sp], at)); break;
-        case Op.MOD: { sp--; const b = this.num(S[sp], at); S[sp - 1] = b === 0 ? 0 : (this.num(S[sp - 1], at) % b) | 0; break; }
+        case Op.MUL: sp--; S[sp - 1] = fx.fmul(this.num(S[sp - 1], at), this.num(S[sp], at)); break;
+        case Op.DIV: sp--; S[sp - 1] = fx.fdiv(this.num(S[sp - 1], at), this.num(S[sp], at)); break;
+        case Op.MOD: { sp--; const a = this.num(S[sp - 1], at), b = this.num(S[sp], at); S[sp - 1] = b === 0 || b === -1 ? 0 : (a % b) | 0; break; }
         case Op.NEG: S[sp - 1] = -this.num(S[sp - 1], at) | 0; break;
         case Op.BAND: sp--; S[sp - 1] = this.num(S[sp - 1], at) & this.num(S[sp], at); break;
         case Op.BOR: sp--; S[sp - 1] = this.num(S[sp - 1], at) | this.num(S[sp], at); break;
@@ -193,8 +234,8 @@ export class PatternVM {
         case Op.SHL: sp--; S[sp - 1] = this.num(S[sp - 1], at) << ((this.num(S[sp], at) >> 16) & 31); break;
         case Op.SHR: sp--; S[sp - 1] = this.num(S[sp - 1], at) >> ((this.num(S[sp], at) >> 16) & 31); break;
         case Op.USHR: sp--; S[sp - 1] = (this.num(S[sp - 1], at) >>> ((this.num(S[sp], at) >> 16) & 31)) | 0; break;
-        case Op.EQ: sp--; S[sp - 1] = S[sp - 1] === S[sp] || (S[sp - 1] instanceof PFunc && S[sp] instanceof PFunc && (S[sp - 1] as PFunc).i === (S[sp] as PFunc).i) ? FIX : 0; break;
-        case Op.NE: sp--; S[sp - 1] = S[sp - 1] !== S[sp] && !(S[sp - 1] instanceof PFunc && S[sp] instanceof PFunc && (S[sp - 1] as PFunc).i === (S[sp] as PFunc).i) ? FIX : 0; break;
+        case Op.EQ: sp--; S[sp - 1] = same(S[sp - 1], S[sp]) ? FIX : 0; break;
+        case Op.NE: sp--; S[sp - 1] = same(S[sp - 1], S[sp]) ? 0 : FIX; break;
         case Op.LT: sp--; S[sp - 1] = this.num(S[sp - 1], at) < this.num(S[sp], at) ? FIX : 0; break;
         case Op.LE: sp--; S[sp - 1] = this.num(S[sp - 1], at) <= this.num(S[sp], at) ? FIX : 0; break;
         case Op.GT: sp--; S[sp - 1] = this.num(S[sp - 1], at) > this.num(S[sp], at) ? FIX : 0; break;
@@ -226,6 +267,7 @@ export class PatternVM {
           const v = S[sp - 1];
           this.sp = base;
           this.depth--;
+          this.localsUsed -= fn.locals;
           return v;
         }
         case Op.IDXGET: {
@@ -253,68 +295,57 @@ export class PatternVM {
 
   private builtin(id: number, a: Val[], pc: number): Val {
     const n = (k: number) => this.num(a[k] ?? 0, pc);
-    const fl = (k: number) => n(k) / FIX;
     switch (BUILTINS[id]?.name) {
       case 'time': {
-        const period = fl(0) * FIX; // ms: interval × 65.536 s
+        const period = n(0); // milliseconds: the interval × 65.536 s
         if (period <= 0) return 0;
-        return toFix((this.clock % period) / period) & 0xffff;
+        const r = this.clock % period;
+        return Math.floor((2 * r * FIX + period) / (2 * period)) & 0xffff;
       }
-      case 'wave': return toFix((1 + Math.sin(fl(0) * Math.PI * 2)) / 2);
+      case 'wave': return fx.fwave(n(0));
       case 'triangle': { const x = n(0) & 0xffff; return x < 0x8000 ? x * 2 : (0x10000 - x) * 2; }
       case 'square': return (n(0) & 0xffff) < n(1) ? FIX : 0;
-      case 'mix': return (n(0) + fmul((n(1) - n(0)) | 0, n(2))) | 0;
-      case 'smoothstep': {
-        const lo = fl(0), hi = fl(1);
-        const t = hi === lo ? (fl(2) < lo ? 0 : 1) : clamp01((fl(2) - lo) / (hi - lo));
-        return toFix(t * t * (3 - 2 * t));
-      }
+      case 'mix': return (n(0) + fx.fmul((n(1) - n(0)) | 0, n(2))) | 0;
+      case 'smoothstep': return fx.smoothstep(n(0), n(1), n(2));
       case 'clamp': { const v = n(0), lo = n(1), hi = n(2); return v < lo ? lo : v > hi ? hi : v; }
-      case 'sin': return toFix(Math.sin(fl(0)));
-      case 'cos': return toFix(Math.cos(fl(0)));
-      case 'tan': return toFix(Math.tan(fl(0)));
-      case 'asin': return toFix(Math.asin(Math.max(-1, Math.min(1, fl(0)))));
-      case 'acos': return toFix(Math.acos(Math.max(-1, Math.min(1, fl(0)))));
-      case 'atan': return toFix(Math.atan(fl(0)));
-      case 'atan2': return toFix(Math.atan2(fl(0), fl(1)));
+      case 'sin': return fx.fsin(n(0));
+      case 'cos': return fx.fcos(n(0));
+      case 'tan': return fx.ftan(n(0));
+      case 'asin': return fx.fasin(n(0));
+      case 'acos': return fx.facos(n(0));
+      case 'atan': return fx.fatan(n(0));
+      case 'atan2': return fx.fatan2(n(0), n(1));
       case 'abs': return Math.abs(n(0)) | 0;
       case 'floor': return n(0) & ~0xffff;
       case 'ceil': return -(-n(0) & ~0xffff) | 0;
       case 'round': return ((n(0) + 0x8000) | 0) & ~0xffff;
       case 'trunc': { const v = n(0); return v < 0 ? -(-v & ~0xffff) | 0 : v & ~0xffff; }
-      case 'frac': { const v = n(0); return v < 0 ? -(-v & 0xffff) : v & 0xffff; }
+      case 'frac': { const v = n(0); return v < 0 ? -(-v & 0xffff) | 0 : v & 0xffff; }
       case 'min': return Math.min(n(0), n(1));
       case 'max': return Math.max(n(0), n(1));
-      case 'pow': return toFix(Math.pow(fl(0), fl(1)));
-      case 'sqrt': return fl(0) <= 0 ? 0 : toFix(Math.sqrt(fl(0)));
-      case 'exp': return toFix(Math.exp(fl(0)));
-      case 'log': return fl(0) <= 0 ? -0x80000000 : toFix(Math.log(fl(0)));
-      case 'log2': return fl(0) <= 0 ? -0x80000000 : toFix(Math.log2(fl(0)));
-      case 'hypot': return toFix(Math.hypot(fl(0), fl(1)));
-      case 'mod': { const b = n(1); if (b === 0) return 0; let r = n(0) % b; if (r !== 0 && (r < 0) !== (b < 0)) r += b; return r | 0; }
-      case 'random': return toFix(this.random() * fl(0));
+      case 'pow': return fx.fpow(n(0), n(1));
+      case 'sqrt': return fx.fsqrt(n(0));
+      case 'exp': return fx.fexp(n(0));
+      case 'log': return fx.flog(n(0));
+      case 'log2': return fx.flog2(n(0));
+      case 'hypot': return fx.fhypot(n(0), n(1));
+      case 'mod': { const b = n(1); if (b === 0 || b === -1) return 0; let r = n(0) % b; if (r !== 0 && (r < 0) !== (b < 0)) r += b; return r | 0; }
+      case 'random': return fx.fmul(this.random16() & 0xffff, n(0));
       case 'prng': {
         let x = this.seed;
         x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
         this.seed = x | 0;
-        return toFix(((x >>> 0) / 4294967296) * fl(0));
+        return fx.fmul(x >>> 16, n(0));
       }
       case 'prngSeed': this.seed = n(0) || 0x2545f491; return 0;
-      case 'hsv': case 'hsv24': {
-        let h = fl(0) % 1; if (h < 0) h += 1;
-        const s = clamp01(fl(1)), v = clamp01(fl(2));
-        const i = Math.floor(h * 6), fr = h * 6 - i, p = v * (1 - s), q = v * (1 - fr * s), t = v * (1 - (1 - fr) * s);
-        [this.r, this.g, this.b] = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i % 6];
+      case 'hsv': case 'hsv24': [this.r, this.g, this.b] = fx.hsv(n(0), n(1), n(2)); return 0;
+      case 'rgb': {
+        const c = (x: number) => (x < 0 ? 0 : x > FIX ? FIX : x);
+        this.r = c(n(0)); this.g = c(n(1)); this.b = c(n(2));
         return 0;
       }
-      case 'rgb': this.r = clamp01(fl(0)); this.g = clamp01(fl(1)); this.b = clamp01(fl(2)); return 0;
-      case 'array': {
-        const len = Math.max(0, n(0) >> 16);
-        if (this.cells + len > MAX_CELLS) this.fail(pc, `the pattern's lists are too big (at most ${MAX_CELLS} values in all)`);
-        this.cells += len;
-        return new PList(new Array(len).fill(0));
-      }
-      case '__list': return new PList(a.slice());
+      case 'array': return this.newList(Math.max(0, n(0) >> 16), pc);
+      case '__list': { const l = this.newList(a.length, pc); for (let i = 0; i < a.length; i++) l.v[i] = a[i]; return l; }
       case 'arrayLength': return toFix(this.list(a[0], pc).v.length);
       case 'arrayForEach': { const l = this.list(a[0], pc); for (let i = 0; i < l.v.length; i++) this.call(a[1], [l.v[i], i * FIX, l], pc); return 0; }
       case 'arrayMutate': { const l = this.list(a[0], pc); for (let i = 0; i < l.v.length; i++) l.v[i] = this.call(a[1], [l.v[i], i * FIX, l], pc); return 0; }
@@ -330,10 +361,16 @@ export class PatternVM {
         return acc;
       }
       case 'arraySum': { const l = this.list(a[0], pc); let s = 0; for (const v of l.v) s = (s + (typeof v === 'number' ? v : 0)) | 0; return s; }
+      // a stable sort by value (anything that is not a number counts as 0)
       case 'arraySort': { const l = this.list(a[0], pc); l.v.sort((x, y) => (typeof x === 'number' ? x : 0) - (typeof y === 'number' ? y : 0)); return 0; }
     }
     this.fail(pc, `the compiled pattern is damaged (unknown built-in ${id})`);
   }
+}
+
+/** == between two values: numbers by value, lists by which list, functions by which function */
+function same(x: Val, y: Val): boolean {
+  return x === y || (x instanceof PFunc && y instanceof PFunc && x.i === y.i);
 }
 
 /** Compiles nothing: runs an already compiled program for `frames` frames of `deltaMs` (tests, checks). */

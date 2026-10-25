@@ -3,6 +3,8 @@ import { compilePattern, FIX, PatternError, programText } from './compile';
 import { fdiv, fmul, PatternVM, runFrames } from './vm';
 import { EXAMPLE_PATTERNS, STARTER_PATTERN } from './examples';
 import { cleanPatternName, parseEpe } from './epe';
+import * as fx from './fixed';
+import { boardFit, decodeProgram, encodeProgram, fixedValues, fromBase64, toBase64 } from './encode';
 
 /** Runs `expr` in a pattern's top level and gives back its value as a plain number. */
 function value(expr: string, pre = ''): number {
@@ -252,5 +254,69 @@ describe('pattern files (.epe)', () => {
   it('names stay file-safe', () => {
     expect(cleanPatternName('..a/b\\c')).toBe('a b c');
     expect(cleanPatternName('   ')).toBe('');
+  });
+});
+
+describe('the board-exact maths (fixed.ts)', () => {
+  const near = (got: number, want: number, tol: number, what: string) => expect(Math.abs(got / FIX - want), what).toBeLessThan(tol);
+  it('stays close to the exact values', () => {
+    for (let x = -20; x <= 20; x += 0.173) {
+      const v = Math.round(x * FIX);
+      near(fx.fsin(v), Math.sin(v / FIX), 1e-4, `sin ${x}`);
+      near(fx.fcos(v), Math.cos(v / FIX), 1e-4, `cos ${x}`);
+      near(fx.fatan(v), Math.atan(v / FIX), 1e-4, `atan ${x}`);
+      near(fx.fatan2(v, Math.round(1.7 * FIX)), Math.atan2(v / FIX, 1.7), 1e-4, `atan2 ${x}`);
+      near(fx.fwave(v), (1 + Math.sin((v / FIX) * Math.PI * 2)) / 2, 1e-4, `wave ${x}`);
+      if (x > 0) {
+        near(fx.fsqrt(v), Math.sqrt(v / FIX), 1e-4, `sqrt ${x}`);
+        near(fx.flog(v), Math.log(v / FIX), 2e-4, `log ${x}`);
+        near(fx.flog2(v), Math.log2(v / FIX), 2e-4, `log2 ${x}`);
+        near(fx.fpow(v, Math.round(1.5 * FIX)), Math.pow(v / FIX, 1.5), Math.pow(v / FIX, 1.5) * 2e-4 + 1e-4, `pow ${x}`);
+      }
+      if (x < 10) near(fx.fexp(v), Math.exp(v / FIX), Math.exp(v / FIX) * 2e-4 + 1e-4, `exp ${x}`);
+      if (Math.abs(x) <= 1) {
+        near(fx.fasin(v), Math.asin(v / FIX), 2e-4, `asin ${x}`);
+        near(fx.facos(v), Math.acos(v / FIX), 2e-4, `acos ${x}`);
+      }
+      near(fx.fhypot(v, 3 * FIX), Math.hypot(v / FIX, 3), 1e-4, `hypot ${x}`);
+    }
+  });
+  it('multiplies exactly like a 64-bit product', () => {
+    const big = (a: number, b: number, s: number) => Number(BigInt.asIntN(32, (BigInt(a) * BigInt(b)) >> BigInt(s)));
+    let seed = 7;
+    const r = () => ((seed = (seed * 1103515245 + 12345) | 0) ^ (seed << 7)) | 0;
+    for (let i = 0; i < 2000; i++) {
+      const a = r(), b = r();
+      for (const s of [16, 22, 29, 30]) expect(fx.mulS(a, b, s)).toBe(big(a, b, s));
+    }
+    for (const a of [-0x80000000, 0x7fffffff, -1, 0, 1]) for (const b of [-0x80000000, 0x7fffffff, -1, 1]) expect(fx.mulS(a, b, 16)).toBe(big(a, b, 16));
+  });
+});
+
+describe('the bytes a board is sent (encode.ts)', () => {
+  it('hold the whole program and come back the same', () => {
+    for (const x of EXAMPLE_PATTERNS) {
+      const p = compilePattern(x.text);
+      const back = decodeProgram(encodeProgram(p));
+      expect(back.code).toEqual(p.code);
+      expect(back.functions.map((f) => [f.addr, f.params, f.locals])).toEqual(p.functions.map((f) => [f.addr, f.params, f.locals]));
+      expect(back.controls).toEqual(p.controls);
+      expect(back.entry).toEqual(p.entry);
+      expect(back.globals.length).toBe(p.globals.length);
+      expect(Array.from(runFrames(back, 5, 16, { random: () => 0.3 }))).toEqual(Array.from(runFrames(p, 5, 16, { random: () => 0.3 })));
+    }
+  });
+  it('start with SPAT and the format, little endian', () => {
+    const b = encodeProgram(compilePattern('export function render(i) { rgb(1, 0, 0) }'));
+    expect(Array.from(b.slice(0, 6))).toEqual([0x53, 0x50, 0x41, 0x54, 1, 0]);
+    expect(fromBase64(toBase64(b))).toEqual(b);
+  });
+  it('say plainly when a pattern is too big for a board', () => {
+    const p = compilePattern('export function render(i) { rgb(1, 0, 0) }');
+    expect(boardFit(p)).toBeNull();
+    expect(boardFit({ ...p, code: new Array(5000).fill(1) })).toMatch(/too big for a board \(5000 code steps, at most 4096\)/);
+  });
+  it('take control values as 16.16', () => {
+    expect(fixedValues([0, 0.5, 1, NaN])).toEqual([0, 32768, 65536, 0]);
   });
 });
