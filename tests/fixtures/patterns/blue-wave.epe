@@ -1,0 +1,8 @@
+{
+ "id": "e2eBlueWave01",
+ "name": "Blue wave",
+ "sources": {
+  "main": "// Blue waves roll along the strip. Written for Specter Studio's tests (MIT).\nexport function beforeRender(delta) {\n  t = time(0.03)\n}\nvar t = 0\nexport function render(index) {\n  hsv(0.62, 1, wave(t + index / 8))\n}\n"
+ },
+ "preview": "/9j/4AAQSkZJRgABAQAAAQABAAD/2Q=="
+}

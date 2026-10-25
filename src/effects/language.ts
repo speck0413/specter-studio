@@ -2,28 +2,25 @@
 // checker decides what is right (markersFromCheck turns its answer into editor squiggles).
 import type * as Monaco from 'monaco-editor';
 import { completionsAt, nameHover } from './completions';
+import { INPUTS, KEYWORDS, LEVELS, OUTPUTS, PIXEL_COLOURS, PIXEL_EFFECTS, SETTINGS, UNITS } from './words';
+
+/** The command a `pixels` help link runs: App.tsx opens Your library at its LED patterns. */
+export const OPEN_PATTERNS = 'specter-open-patterns';
 
 export const LANG_ID = 'effect-script';
 
-const KEYWORDS = ['effect', 'wait', 'for', 'sleep', 'fade', 'to', 'over', 'flicker', 'audio_single', 'audio_loop', 'audio_volume', 'audio_stop',
-  // the advanced lines (the firmware's SHOW-SCRIPT.md)
-  'limit', 'run', 'runs', 'per', 'pulse'];
-// the settings a line may name for a time (wait, pulse, limit) or a count (limit): read when the line runs
-const SETTINGS = ['out1_on_ms', 'out2_on_ms', 'out3_on_ms', 'recover_time_ms', 'cooldown_ms', 'trigger_out_pulse_ms', 'role_pulse_ms', 'runs_per_cooldown'];
-const OUTPUTS = ['out1', 'out2', 'out3', 'out4', 'rly1', 'rly2', 'cc1', 'cc2'];
-const INPUTS = ['trig1', 'trig2', 'user1', 'user2', 'user3'];
-const UNITS = ['ms', 's', 'sec', 'secs', 'second', 'seconds', 'min', 'mins', 'minute', 'minutes'];
-const LEVELS = ['on', 'off'];
+// the words come from the firmware's shared list (words.ts), so the board's phone page and Studio colour alike
+const COLOUR_WORDS = PIXEL_COLOURS.map(([n]) => n);
 
 const HELP: Record<string, string> = {
   effect: 'Starts an effect: `effect porch light:`. The lines below it belong to it until the next effect. Effects run at the same time, except two that use the same output: those take turns (a press while the other runs is remembered and runs after it, if the input is still held then). Every effect can also be started by its name from the phone, MQTT or serial, with the remote trigger on (or listed in remote_free_effects).',
   wait: '`wait 2` waits this long before the next line (`wait 200 ms`, `wait 3 min`, `wait for 2 s` too; a wait at the end works as a rest time). `wait for trig1` waits until an input is pressed and held for a moment (debounce), after it was released: `wait for trig1`. The first line of every effect (only sound lines may come before it). Settings trig1_wait / trig2_wait: "ready" (a press counts once the effect can run) or "return" (a press while the effect cannot run is remembered and runs when it can, if the input is still held then).',
   for: '`wait for <input>` waits for a press (`wait for 2 s` waits a time); `flicker <output> for <time>` flickers for that long.',
   sleep: '`sleep` still works; new scripts say `wait`: `wait 2.5`, `wait 200 ms`, `wait 3 min`.',
-  fade: 'Changes a dimmable output smoothly: `fade out1 to 0% over 2`. Works on out1 to out4 and DMX channels.',
+  fade: 'Changes a dimmable output smoothly: `fade out1 to 0% over 2`. Works on out1 to out4 and DMX channels. In a `pixels` line it is the effect that fades the strip in from dark: `pixels = fade blue`.',
   to: 'The level a fade goes to: on, off or a percentage.',
   over: 'How long a fade takes.',
-  flicker: 'Flickers a dimmable output at random like a failing bulb, then gives its level back: `flicker out1 for 3`.',
+  flicker: 'Flickers a dimmable output at random like a failing bulb, then gives its level back: `flicker out1 for 3`. In a `pixels` line the strip flickers: `pixels = flicker orange`.',
   audio_single: 'Plays a sound once by its number (1 to 99): `audio_single = 3` plays the one file in the card\'s folder 03 (03/001-<description>.mp3). One sound plays at a time: a new one replaces it.',
   audio_loop: 'The background sound: `audio_loop = 2` plays sound 2 over and over; a sound played with audio_single takes over and the loop comes back after it. Above the first "wait for" it starts at power-on and again each time the effect is back at its top. `audio_loop = off` ends it.',
   audio_stop: 'Stops the sound, and the background loop.',
@@ -31,6 +28,15 @@ const HELP: Record<string, string> = {
   limit: 'At most N runs in a window that starts at the first run: `limit 3 runs per 3 min`. While it is used up, presses are ignored.',
   per: '`limit 3 runs per 3 min`: the window\'s length.',
   pulse: 'Turns an output on now and off after the time, while the effect goes on: `pulse cc1 for 200 ms`.',
+  pixels: 'Lights the LED strip until another `pixels` line: an effect, then a colour. `pixels = chase red`, `pixels = rainbow`, `pixels = comet 0xff2000` (an exact colour: 0x and six hex digits), `pixels = warm white` (a colour alone fills the strip), `pixels = off`. Effects: off, fill, chase, rainbow, flash, fade, flicker, comet, sparkle, breathe, fire. Above the first `wait for` it sets the strip at power-on and each time the effect is back at its top. How fast the effects run is the setting pixel_speed, how bright pixel_brightness. To colour every light your own way, write an [LED pattern](command:specter.openPatterns) (sending patterns to a board is coming).',
+  fill: 'Pixel effect: the whole strip in one colour (`pixels = fill blue`; `pixels = blue` is the same).',
+  chase: 'Pixel effect: a few lit pixels running along the strip (`pixels = chase red`).',
+  rainbow: 'Pixel effect: a rainbow moving along the strip; it has its own colours (`pixels = rainbow`).',
+  flash: 'Pixel effect: the strip flashes on and off (`pixels = flash white`).',
+  comet: 'Pixel effect: a bright head with a fading tail running along the strip (`pixels = comet cyan`).',
+  sparkle: 'Pixel effect: random pixels flash and fade (`pixels = sparkle warm white`).',
+  breathe: 'Pixel effect: the strip slowly glows up and down (`pixels = breathe purple`).',
+  fire: 'Pixel effect: red, orange and yellow flames; it has its own colours (`pixels = fire`).',
   on: 'Full on (100 %).',
   off: 'Off (0 %).',
   trig1: 'Trigger jack 1 (a button, pressure mat or motion sensor).',
@@ -59,6 +65,8 @@ export function hoverFor(word: string): string | null {
   if (['sec', 'secs', 'second', 'seconds'].includes(w)) return HELP.s;
   if (['mins', 'minute', 'minutes'].includes(w)) return HELP.min;
   if (['run', 'runs'].includes(w)) return HELP.limit;
+  if (COLOUR_WORDS.includes(w) || w === 'warm') return `A colour for the LED strip: \`pixels = chase ${w === 'warm' || w === 'white' ? 'warm white' : w}\`. The colours are ${COLOUR_WORDS.slice(0, -1).join(', ')} and warm white, or 0xRRGGBB for an exact colour.`;
+  if (/^0x[0-9a-f]{6}$/.test(w)) return `An exact colour for the LED strip: red ${parseInt(w.slice(2, 4), 16)}, green ${parseInt(w.slice(4, 6), 16)}, blue ${parseInt(w.slice(6, 8), 16)} (each 0 to 255).`;
   if (SETTINGS.includes(w)) return w === 'runs_per_cooldown'
     ? 'The setting runs_per_cooldown, a number of runs: `limit runs_per_cooldown runs per cooldown_ms`. Change it on the board and the next run uses it.'
     : `The setting ${w}, a time in milliseconds: \`wait ${w}\`. Change it on the board and the line uses the new time the next time it runs.`;
@@ -124,6 +132,7 @@ export function registerEffectLanguage(monaco: typeof Monaco) {
   if (registered) return;
   registered = true;
   monaco.languages.register({ id: LANG_ID, extensions: ['.specter'], aliases: ['Effect script'] });
+  monaco.editor.registerCommand('specter.openPatterns', () => window.dispatchEvent(new CustomEvent(OPEN_PATTERNS)));
   monaco.languages.setLanguageConfiguration(LANG_ID, {
     comments: { lineComment: '#' },
     // after "effect name:" the next line is indented (the effect's body); other lines keep their indent
@@ -137,14 +146,18 @@ export function registerEffectLanguage(monaco: typeof Monaco) {
     units: UNITS,
     levels: LEVELS,
     settings: SETTINGS,
+    effects: PIXEL_EFFECTS.filter((e) => !LEVELS.includes(e) && !KEYWORDS.includes(e)),
+    colours: COLOUR_WORDS.filter((c) => !c.includes(' ')),
     tokenizer: {
       root: [
         [/#.*$/, 'comment'],
         [/^\s*effect\b/, 'keyword', '@effectName'],
+        [/warm\s+white\b/, 'constant'],
+        [/0x[0-9a-f]{6}\b/, 'number.hex'],
         [/dmx\d+/, 'variable'],
         [/\d+(\.\d+)?\s*%/, 'number'],
         [/\d+(\.\d+)?/, 'number'],
-        [/[a-z_][a-z0-9_]*/, { cases: { '@keywords': 'keyword', '@outputs': 'variable', '@inputs': 'type', '@units': 'number', '@levels': 'constant', '@settings': 'number', '@default': 'identifier' } }],
+        [/[a-z_][a-z0-9_]*/, { cases: { '@keywords': 'keyword', '@outputs': 'variable', '@inputs': 'type', '@units': 'number', '@levels': 'constant', '@settings': 'number', '@effects': 'constant', '@colours': 'constant', '@default': 'identifier' } }],
         [/[=:]/, 'delimiter'],
         [/["'][^"']*["']/, 'string'],
       ],
@@ -164,7 +177,7 @@ export function registerEffectLanguage(monaco: typeof Monaco) {
       const w = model.getWordUntilPosition(position);
       const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: w.startColumn, endColumn: w.endColumn };
       const K = monaco.languages.CompletionItemKind;
-      const kind = { line: K.Snippet, level: K.Value, terminal: K.Variable, unit: K.Unit, setting: K.Property, sound: K.File, word: K.Keyword };
+      const kind = { line: K.Snippet, level: K.Value, terminal: K.Variable, unit: K.Unit, setting: K.Property, sound: K.File, word: K.Keyword, colour: K.Color };
       return {
         suggestions: completionsAt(before).map((c, i) => ({
           label: c.label,
@@ -185,7 +198,8 @@ export function registerEffectLanguage(monaco: typeof Monaco) {
       const w = model.getWordAtPosition(position);
       const h = w && (hoverFor(w.word) ?? nameHover(w.word));
       if (!w || !h) return null;
-      return { range: new monaco.Range(position.lineNumber, w.startColumn, position.lineNumber, w.endColumn), contents: [{ value: h }] };
+      // the pixels help links to LED patterns (a command link, so only this one is trusted)
+      return { range: new monaco.Range(position.lineNumber, w.startColumn, position.lineNumber, w.endColumn), contents: [{ value: h, isTrusted: { enabledCommands: ['specter.openPatterns'] } }] };
     },
   });
 }
