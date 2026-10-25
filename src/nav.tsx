@@ -11,7 +11,7 @@ export interface Loc {
   /** boards: the board page's section, for example 'script' */
   tab?: string;
   /** library: what is open in the editor */
-  item?: { kind: 'effect' | 'firmware'; name: string };
+  item?: { kind: 'effect' | 'firmware' | 'pattern'; name: string };
   /** bumped to open the same place again (reload the effect, unfold "Add a board") */
   seq?: number;
   /** boards overview: unfold "Add a board" */

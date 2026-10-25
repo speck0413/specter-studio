@@ -5,6 +5,12 @@ import { completionsAt, nameHover } from './completions';
 
 export const LANG_ID = 'effect-script';
 
+// TODO(words.js): the firmware is to get one shared word list for the show script, `firmware/web/words.js`
+// (keywords, outputs, inputs, units, levels, settings and the dmxN rule), which the phone page's highlighter
+// also uses. When it is on the firmware branch this submodule follows, import the lists below from
+// '../../firmware/firmware/web/words.js', the way src/record/take.ts imports take.js, and delete these copies.
+// It was not there yet on 2026-10-25 (firmware 91f77d9).
+
 const KEYWORDS = ['effect', 'wait', 'for', 'sleep', 'fade', 'to', 'over', 'flicker', 'audio_single', 'audio_loop', 'audio_volume', 'audio_stop',
   // the advanced lines (the firmware's SHOW-SCRIPT.md)
   'limit', 'run', 'runs', 'per', 'pulse'];

@@ -55,9 +55,6 @@ test.beforeAll(async ({ browser }) => {
 });
 
 test.afterAll(async () => {
-  // this file's Studio page goes too: a page left open keeps talking to the shared device layer (and loading the
-  // browser) through every later file
-  await page?.context().close();
   // the rules live in the device layer, which the later specs share: leave none behind
   await dl('automation_set', { rules: [] }).catch(() => {});
   bridge.close();

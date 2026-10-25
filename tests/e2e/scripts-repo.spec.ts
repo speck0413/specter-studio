@@ -48,12 +48,7 @@ test.beforeAll(async ({ browser }) => {
   await page.goto('/');
 });
 
-test.afterAll(async () => {
-  // this file's Studio page goes too: a page left open keeps talking to the shared device layer (and loading the
-  // browser) through every later file
-  await page?.context().close();
-  fs.rmSync(root, { recursive: true, force: true });
-});
+test.afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
 
 const dialog = () => page.getByRole('dialog');
 
