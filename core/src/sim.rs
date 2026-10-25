@@ -48,6 +48,10 @@ pub struct SimOptions {
     pub swap_ms: Option<u64>,
     /// a fixed port (switching a practice board back on keeps its address); None = any free port
     pub port: Option<u16>,
+    /// where the board link's peer-to-peer frames go (`host:port,...`, the other boards' discovery ports) instead of a
+    /// broadcast: two practice boards on this computer tell each other (PROTOCOL.md "Board link"; needs a
+    /// discovery port of its own on each)
+    pub link_peers: Option<String>,
 }
 
 /// Starts a simulated board on a free port and waits for its "on http://localhost:PORT/" line.
@@ -69,6 +73,9 @@ pub fn start(o: &SimOptions) -> Result<Sim, String> {
     }
     if o.fail_self_check {
         cmd.arg("--fail-self-check");
+    }
+    if let Some(p) = &o.link_peers {
+        cmd.args(["--link-peers", p]);
     }
     let mut child = cmd.stdout(Stdio::piped()).stderr(Stdio::null()).spawn().map_err(|e| format!("cannot start the simulator: {e}"))?;
     let mut out = BufReader::new(child.stdout.take().unwrap());

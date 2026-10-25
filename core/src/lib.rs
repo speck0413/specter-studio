@@ -425,6 +425,7 @@ impl Studio {
                     swap_ms: a["swap_ms"].as_u64(),
                     discovery_port: a["discovery_port"].as_u64().unwrap_or(0) as u16,
                     port: None,
+                    link_peers: opt_str(&a, "link_peers"),
                 };
                 let o2 = o.clone();
                 let s = tokio::task::spawn_blocking(move || sim::start(&o)).await.map_err(|e| e.to_string())??;
