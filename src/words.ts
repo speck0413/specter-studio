@@ -153,6 +153,8 @@ export function checkHint(message: string, line: string | undefined, terminals: 
 export function lineHint(line: string | undefined): string | null {
   if (!line) return null;
   const l = line.replace(/#.*/, '').trim().toLowerCase();
+  // a tell line names another board's effects and settings: the board's own message says what is wrong with it
+  if (/^tell(\s|$)/.test(l)) return null;
   const out = /\b(out[1-4]|rly[12]|cc[12])\b/.exec(l)?.[1] || 'out1';
   let m: RegExpExecArray | null;
   if ((m = /^(?:wait|pause|delay)\s+(\d+(?:\.\d+)?)\s*(ms|s|sec|secs|seconds?|min|mins|minutes?)?$/.exec(l))) {
