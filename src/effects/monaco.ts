@@ -3,6 +3,7 @@ import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker';
 import { loader } from '@monaco-editor/react';
 import { registerEffectLanguage } from './language';
+import { registerPatternLanguage } from '../patterns/language';
 
 let done = false;
 export function setupMonaco() {
@@ -12,4 +13,5 @@ export function setupMonaco() {
   (self as any).MonacoEnvironment = { getWorker: () => new EditorWorker() };
   loader.config({ monaco });
   registerEffectLanguage(monaco);
+  registerPatternLanguage(monaco);
 }

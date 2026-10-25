@@ -4,15 +4,17 @@
 // the identical text and a name the board does not have is shown, marked, never dropped.
 import * as Blockly from 'blockly';
 import { dimsId, findTerm, getTerms, outputDims, shown, Term } from './terms';
+import { colourHex, NO_COLOUR, PIXEL_COLOURS, PIXEL_EFFECTS } from './words';
 
 type Option = [string, string];
-type ChoiceKind = 'input' | 'output' | 'dimmable' | 'level' | 'volume' | 'sound' | 'loop';
+type ChoiceKind = 'input' | 'output' | 'dimmable' | 'level' | 'volume' | 'sound' | 'loop' | 'pixeleffect' | 'pixelcolour';
 type PopupKind = 'time' | 'runs';
 
 // menu items that open a small editor instead of being a value
 const LEVEL = '\u0000level';
 const DMX = '\u0000dmx';
 const NUMBER = '\u0000number';
+const EXACT = '\u0000exact';
 
 const unknownNote = (what: 'terminal' | 'sound' | 'setting') => {
   const t = getTerms();
@@ -78,6 +80,19 @@ function levelPopup(field: Blockly.Field<string>) {
     slider.addEventListener('input', () => { num.value = slider.value; field.setValue(`${slider.value}%`); });
     box.append(el('div', { style: ROW_CSS }, slider, num, el('span', { textContent: '%' })));
     return slider;
+  });
+}
+
+/** The exact colour editor: the system colour picker; the line gets 0xRRGGBB (`#` would start a comment). */
+export function colourPopup(field: Blockly.Field<string>) {
+  const start = colourHex(field.getValue() || '') ?? 'ff8000';
+  field.setValue(`0x${start}`);
+  popup(field, 'Exact colour', (box) => {
+    const pick = el('input', { type: 'color', value: `#${start}`, 'aria-label': 'Exact colour', style: 'width:64px;height:32px;padding:0;border:none;background:none;cursor:pointer' });
+    const text = el('span', { textContent: `0x${start}`, style: 'font-family:monospace' });
+    pick.addEventListener('input', () => { const v = `0x${pick.value.slice(1).toLowerCase()}`; text.textContent = v; field.setValue(v); });
+    box.append(el('label', { style: ROW_CSS }, pick, text));
+    return pick;
   });
 }
 
@@ -182,8 +197,19 @@ function baseOptions(kind: ChoiceKind, field: Blockly.Field<any>): Option[] {
     case 'volume': return [['100%', '100%'], ['off (silent)', 'off'], ['level…', LEVEL]];
     case 'sound': return [...t.sounds.map(soundOption), ['another number…', NUMBER]];
     case 'loop': return [...t.sounds.map(soundOption), ['off (no background sound)', 'off'], ['another number…', NUMBER]];
+    case 'pixeleffect': return [...PIXEL_EFFECTS.map((e): Option => [e, e]), ['colour only (fills the strip)', '']];
+    case 'pixelcolour': {
+      const own = NO_COLOUR.includes(effectOf(field).toLowerCase());
+      return [[own ? 'its own colours' : 'no colour (white)', ''], ...PIXEL_COLOURS.map(([n]): Option => [n, n]), ['exact colour…', EXACT]];
+    }
   }
 }
+
+/** The effect a colour field's block shows (its EFFECT), or ''. */
+const effectOf = (f: Blockly.Field<any>) => {
+  const b = f.getSourceBlock();
+  return (b && b.getField('EFFECT') ? b.getFieldValue('EFFECT') : '') || '';
+};
 
 const soundOption = (s: { n: number; description: string }): Option => [s.description ? `${s.n} · ${s.description}` : String(s.n), String(s.n)];
 
@@ -203,6 +229,15 @@ export function choiceOptions(kind: ChoiceKind, field: Blockly.Field<any>, value
     }
     if (/^\s*dmx\s*\d+\s*$/i.test(value)) return [[value.trim(), value], ...base];
     return [[value.trim() ? `${value.trim()} (${unknownNote('terminal')})` : '…', value], ...base];
+  }
+  // pixel effects and colours: any case and spacing take their entry's place (`Sparkle`, `Warm  White`); an exact
+  // colour is shown as written; anything else is kept and marked
+  if (kind === 'pixeleffect' || kind === 'pixelcolour') {
+    const key = value.trim().toLowerCase().replace(/\s+/g, ' ');
+    const i = base.findIndex(([, v]) => v !== EXACT && v === key);
+    if (i >= 0) { const copy = base.slice(); copy[i] = [base[i][0], value]; return copy; }
+    if (kind === 'pixelcolour' && colourHex(value)) return [[value.trim(), value], ...base];
+    return [[`${value.trim()} (${kind === 'pixeleffect' ? 'not a pixel effect' : 'not a colour'})`, value], ...base];
   }
   if (kind === 'level' || kind === 'volume') {
     if (LEVEL_WORDS.test(value)) {
@@ -247,9 +282,9 @@ export class ChoiceField extends Blockly.FieldDropdown {
   }
   protected onItemSelected_(menu: Blockly.Menu, item: Blockly.MenuItem) {
     const v = item.getValue();
-    if (v === LEVEL || v === DMX || v === NUMBER) {
+    if (v === LEVEL || v === DMX || v === NUMBER || v === EXACT) {
       Blockly.DropDownDiv.hideIfOwner(this as any, true);
-      setTimeout(() => (v === LEVEL ? levelPopup(this as any) : this.openNumber(v === DMX)), 0);
+      setTimeout(() => (v === LEVEL ? levelPopup(this as any) : v === EXACT ? colourPopup(this as any) : this.openNumber(v === DMX)), 0);
       return;
     }
     super.onItemSelected_(menu, item);

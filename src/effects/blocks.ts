@@ -9,8 +9,9 @@
 /* eslint-disable */
 import * as Blockly from 'blockly';
 import { registerFields } from './fields';
+import { splitPixels } from './words';
 
-const COLOURS = { effect: 30, wait: 200, set: 120, time: 260, sound: 330, note: '#6d6d6d' };
+const COLOURS = { effect: 30, wait: 200, set: 120, time: 260, sound: 330, pixels: 290, note: '#6d6d6d' };
 const defs = [
   { type: 'ps_effect', message0: 'effect %1 :', args0: [{ type: 'field_input', name: 'NAME', text: 'my effect' }],
     message1: '%1', args1: [{ type: 'input_statement', name: 'LINES' }], previousStatement: null, nextStatement: null, colour: COLOURS.effect,
@@ -36,6 +37,8 @@ const defs = [
   { type: 'ps_audio_stop', message0: 'stop the sound', previousStatement: null, nextStatement: null, colour: COLOURS.sound, tooltip: 'Stops the sound.' },
   { type: 'ps_audio_volume', message0: 'sound volume %1', args0: [{ type: 'field_ps_choice', name: 'VOLUME', kind: 'volume', text: '60%' }], previousStatement: null, nextStatement: null, colour: COLOURS.sound,
     tooltip: 'How loud the script\'s sounds play from here on: 0% (silent) to 100%.' },
+  { type: 'ps_pixels', message0: 'light the pixels %1 %2', args0: [{ type: 'field_ps_choice', name: 'EFFECT', kind: 'pixeleffect', text: 'rainbow' }, { type: 'field_ps_choice', name: 'COLOUR', kind: 'pixelcolour', text: '' }], previousStatement: null, nextStatement: null, colour: COLOURS.pixels,
+    tooltip: 'Lights the LED strip with an effect and a colour until another pixels line. rainbow and fire have their own colours. To colour every light your own way, write an LED pattern in Your library.' },
   { type: 'ps_comment', message0: '# %1', args0: [{ type: 'field_input', name: 'TEXT', text: '' }], previousStatement: null, nextStatement: null, colour: COLOURS.note,
     tooltip: 'A comment or a blank line: the board skips it.' },
   { type: 'ps_raw', message0: 'line %1', args0: [{ type: 'field_input', name: 'TEXT', text: '' }], previousStatement: null, nextStatement: null, colour: 0,
@@ -43,7 +46,7 @@ const defs = [
 ];
 const FIELDS = {
   ps_effect: ['NAME'], ps_wait: ['INPUT'], ps_set: ['TARGET', 'LEVEL'], ps_sleep: ['TIME'], ps_fade: ['TARGET', 'LEVEL', 'TIME'],
-  ps_flicker: ['TARGET', 'TIME'], ps_pulse: ['TARGET', 'TIME'], ps_limit: ['RUNS', 'TIME'], ps_audio_single: ['SOUND'], ps_audio_loop: ['SOUND'], ps_audio_stop: [], ps_audio_volume: ['VOLUME'], ps_comment: ['TEXT'], ps_raw: ['TEXT'],
+  ps_flicker: ['TARGET', 'TIME'], ps_pulse: ['TARGET', 'TIME'], ps_limit: ['RUNS', 'TIME'], ps_audio_single: ['SOUND'], ps_audio_loop: ['SOUND'], ps_audio_stop: [], ps_audio_volume: ['VOLUME'], ps_pixels: ['EFFECT', 'COLOUR'], ps_comment: ['TEXT'], ps_raw: ['TEXT'],
 };
 
 // ---------------------------------------------------------------- one line → kind and fields
@@ -112,6 +115,14 @@ export function parse(raw) {
     const v = r.trim();
     if (v === '' || v[0] === '=' || v[0] === ':') return { type: 'ps_audio_volume', f: { VOLUME: v.slice(1).trim() }, p };
   }
+  // pixels = <effect> <colour> (SHOW-SCRIPT.md SS-X1); `pixels red` without "=" is left for Check to explain
+  if ((r = kw(low, 'pixels')) !== null) {
+    const v = r.trim();
+    if (v === '' || v[0] === '=' || v[0] === ':') {
+      const x = splitPixels(v.slice(1));
+      return { type: 'ps_pixels', f: { EFFECT: x.effect, COLOUR: x.colour }, p };
+    }
+  }
   if ((r = kw(low, 'sleep')) !== null) return { type: 'ps_sleep', f: { TIME: r.trim() }, p };
   if ((r = kw(low, 'fade')) !== null) {
     const m = r.match(/^\s*([A-Za-z_]+\d*)\s*[Tt][Oo]\s*(.*?)\s*[Oo][Vv][Ee][Rr]\s*(.*)$/);
@@ -151,6 +162,7 @@ function lineOf(type, f) {
     case 'ps_audio_loop': return `audio_loop = ${f.SOUND}`;
     case 'ps_audio_stop': return 'audio_stop';
     case 'ps_audio_volume': return `audio_volume = ${f.VOLUME}`;
+    case 'ps_pixels': return `pixels = ${[f.EFFECT, f.COLOUR].map((x) => (x || '').trim()).filter(Boolean).join(' ')}`.trimEnd();
     case 'ps_comment': return f.TEXT ? `# ${f.TEXT}` : '';
     default: return f.TEXT || '';
   }
@@ -300,6 +312,7 @@ export const TOOLBOX = {
     { kind: 'block', type: 'ps_audio_loop' },
     { kind: 'block', type: 'ps_audio_stop' },
     { kind: 'block', type: 'ps_audio_volume' },
+    { kind: 'block', type: 'ps_pixels' },
     { kind: 'block', type: 'ps_comment' },
   ],
 };

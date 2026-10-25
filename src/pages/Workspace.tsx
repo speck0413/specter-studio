@@ -1,5 +1,5 @@
 // "Your library": every effect script and every firmware of your own, in one list; pick one to edit it.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, Chip, Dialog, DialogContent, DialogTitle, Divider, List, ListItemButton, ListItemText, ListSubheader, Menu, MenuItem, Stack, Typography } from '@mui/material';
 import Add from '@mui/icons-material/Add';
 import { call } from '../api';
@@ -7,8 +7,11 @@ import { useStore } from '../store';
 import { useBoardActions } from '../components/actions';
 import EffectEditor from './EffectEditor';
 import FirmwareEditor from './FirmwareEditor';
+import PatternEditor from './PatternEditor';
+import { EXAMPLE_PATTERNS, STARTER_PATTERN } from '../patterns/examples';
+import { cleanPatternName, parseEpe } from '../patterns/epe';
 import NewEffect from '../components/NewEffect';
-import { saveNewEffect, takenNote } from '../library';
+import { freeName, saveNewEffect, takenNote } from '../library';
 import { dropDraft, moveDraft } from '../drafts';
 import { Loc, useNav } from '../nav';
 import { keyLabel } from '../shell/keys';
@@ -28,7 +31,11 @@ export default function Workspace({ dark, loc }: { dark: boolean; loc: Loc }) {
   const [effects, setEffects] = useState<any[]>([]);
   const [firmware, setFirmware] = useState<any[]>([]);
   const [sounds, setSounds] = useState<Record<string, number>>({});
-  const [sel, setSel] = useState<{ kind: 'effect' | 'firmware'; name: string; text?: string } | null>(null);
+  const [patterns, setPatterns] = useState<any[]>([]);
+  const [sel, setSel] = useState<{ kind: 'effect' | 'firmware' | 'pattern'; name: string; text?: string } | null>(null);
+  const [patternExamples, setPatternExamples] = useState(false);
+  const [pmenu, setPmenu] = useState<{ name: string; x: number; y: number } | null>(null);
+  const importInput = useRef<HTMLInputElement>(null);
   const [examples, setExamples] = useState<any[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -54,6 +61,7 @@ export default function Workspace({ dark, loc }: { dark: boolean; loc: Loc }) {
     call('library_list', { folder: ws }).then(setEffects).catch((e) => setError(String(e.message || e)));
     call('library_projects', { folder: ws }).then(setFirmware).catch(() => setFirmware([]));
     call('sounds', { folder: ws }).then(setSounds).catch(() => setSounds({}));
+    call('pattern_list', { folder: ws }).then(setPatterns).catch(() => setPatterns([]));
   }, [ws, libraryVersion]);
 
   const load = async (name: string) => {
@@ -64,6 +72,7 @@ export default function Workspace({ dark, loc }: { dark: boolean; loc: Loc }) {
     if (!ws) return;
     if (!loc.item) setSel(null);
     else if (loc.item.kind === 'effect') void load(loc.item.name);
+    else if (loc.item.kind === 'pattern') { const n = loc.item.name; call('pattern_read', { folder: ws, name: n }).then((text) => setSel({ kind: 'pattern', name: n, text })).catch((e) => setError(String(e.message || e))); }
     else setSel({ kind: 'firmware', name: loc.item.name });
   }, [loc.item?.kind, loc.item?.name, loc.seq, ws]); // eslint-disable-line react-hooks/exhaustive-deps
   const openEffect = (name: string) => nav.go({ view: 'library', item: { kind: 'effect', name } });
@@ -77,6 +86,28 @@ export default function Workspace({ dark, loc }: { dark: boolean; loc: Loc }) {
       bumpLibrary();
       setNote(r.renamed ? takenNote(name, r.name) : '');
       openEffect(r.name);
+    } catch (e: any) { setError(String(e.message || e)); }
+  };
+  // LED patterns (src/patterns/): a new one never replaces one that is there (" 2", " 3"... as for effects)
+  const openPattern = (name: string) => nav.go({ view: 'library', item: { kind: 'pattern', name } });
+  const savePattern = async (asked: string, text: string): Promise<string> => {
+    const list: any[] = await call('pattern_list', { folder: ws });
+    const name = freeName(list.filter((p) => !p.source).map((p) => p.title), cleanPatternName(asked) || 'my pattern');
+    await call('pattern_save', { folder: ws, name, text, new: true });
+    bumpLibrary();
+    setNote(name !== asked.trim() ? `There is already a pattern called “${asked.trim()}” in your library, so this one is called “${name}”. Nothing was replaced.` : '');
+    return name;
+  };
+  const newPattern = async (text = STARTER_PATTERN, suggested = '') => {
+    const name = await act.askName('Name your new pattern', suggested);
+    if (!name) return;
+    try { openPattern(await savePattern(name, text)); } catch (e: any) { setError(String(e.message || e)); }
+  };
+  const importPattern = async (file: File) => {
+    try {
+      const p = parseEpe(await file.text());
+      const name = await savePattern(p.name, p.source);
+      openPattern(name);
     } catch (e: any) { setError(String(e.message || e)); }
   };
   const newFirmware = async () => {
@@ -119,6 +150,26 @@ export default function Workspace({ dark, loc }: { dark: boolean; loc: Loc }) {
             ))}
             {g.items.length === 0 && <Typography variant="body2" color="text.secondary" sx={{ px: 3 }}>{g.id ? 'No scripts in this source yet.' : 'No effects yet. Press New effect, or Start from an example.'}</Typography>}
           </List>); })}
+          <List component="div" disablePadding aria-label="LED patterns" data-testid="pattern-list"
+            subheader={<ListSubheader component="div" disableSticky sx={{ px: 3 }}>LED patterns</ListSubheader>}>
+            {patterns.map((p) => (
+              <ListItemButton key={p.name} selected={sel?.kind === 'pattern' && sel.name === p.name} onClick={() => openPattern(p.name)} sx={{ px: 3 }}
+                aria-current={sel?.kind === 'pattern' && sel.name === p.name ? 'page' : undefined}
+                onContextMenu={(ev) => { ev.preventDefault(); setPmenu({ name: p.name, x: ev.clientX, y: ev.clientY }); }}
+                onKeyDown={(ev) => { if (ev.key === 'ContextMenu' || (ev.shiftKey && ev.key === 'F10')) { ev.preventDefault(); const r = ev.currentTarget.getBoundingClientRect(); setPmenu({ name: p.name, x: r.left + 24, y: r.bottom }); } }}>
+                <ListItemText primary={p.title} slotProps={{ primary: { noWrap: true } } as any} />
+                {p.source && <Chip size="small" variant="outlined" label={p.source} sx={{ ml: 1, maxWidth: 96 }} aria-label={`from ${p.source}`} />}
+              </ListItemButton>
+            ))}
+            {patterns.length === 0 && <Typography variant="body2" color="text.secondary" sx={{ px: 3 }}>Patterns colour an LED strip, light by light. Make one and watch it in the preview.</Typography>}
+          </List>
+          <Stack direction="row" spacing={1} sx={{ px: 2, flexWrap: 'wrap', rowGap: 1 }}>
+            <Button startIcon={<Add />} onClick={() => void newPattern()}>New pattern</Button>
+            <Button onClick={() => setPatternExamples(true)}>Examples</Button>
+            <Button onClick={() => importInput.current?.click()}>Import a pattern file…</Button>
+            <input ref={importInput} type="file" accept=".epe" hidden data-testid="pattern-import"
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importPattern(f); }} />
+          </Stack>
           {prefs.advanced && <>
           <List component="div" disablePadding subheader={<ListSubheader component="div" disableSticky sx={{ px: 3 }}>Your own firmware</ListSubheader>} aria-label="Firmware">
             {firmware.map((f) => (
@@ -147,6 +198,8 @@ export default function Workspace({ dark, loc }: { dark: boolean; loc: Loc }) {
         )}
         {sel?.kind === 'effect' && <EffectEditor name={sel.name} initial={sel.text || ''} dark={dark} onSaved={() => {}}
           onChanged={(n) => { bumpLibrary(); if (n) nav.replace({ item: { kind: 'effect', name: n }, seq: (loc.seq || 0) + 1 }); else nav.replace({ item: undefined }); }} />}
+        {sel?.kind === 'pattern' && <PatternEditor key={sel.name} name={sel.name} initial={sel.text || ''} dark={dark} onSaved={bumpLibrary}
+          readOnly={!!repo.sources.find((s) => s.id === sourceOf(sel.name))?.read_only} />}
         {sel?.kind === 'firmware' && <FirmwareEditor project={firmware.find((f) => f.name === sel.name)} dark={dark} />}
       </Box>
       {menu && (() => {
@@ -163,6 +216,33 @@ export default function Workspace({ dark, loc }: { dark: boolean; loc: Loc }) {
           </Menu>
         );
       })()}
+      {pmenu && (() => {
+        const n = pmenu.name;
+        const run = (f: () => Promise<unknown> | unknown) => () => { setPmenu(null); void Promise.resolve(f()).catch((err: any) => setError(String(err?.message || err))); };
+        return (
+          <Menu open onClose={() => setPmenu(null)} anchorReference="anchorPosition" anchorPosition={{ top: pmenu.y, left: pmenu.x }} MenuListProps={{ 'aria-label': `What to do with the pattern “${n}”` }}>
+            <MenuItem onClick={run(() => openPattern(n))}>Open</MenuItem>
+            <MenuItem onClick={run(async () => { const to = await act.askName(`Rename “${titleOf(n)}”`, titleOf(n)); const full = to ? qualify(sourceOf(n), to) : ''; if (full && full !== n) { await call('pattern_rename', { folder: ws, from: n, to: full }); bumpLibrary(); if (sel?.name === n) nav.replace({ item: { kind: 'pattern', name: full } }); } })}>Rename…</MenuItem>
+            <MenuItem onClick={run(async () => { const to = await act.askName(`Copy “${titleOf(n)}” as`, `${titleOf(n)} (copy)`); if (to) openPattern(await savePattern(to, await call('pattern_read', { folder: ws, name: n }))); })}>Duplicate…</MenuItem>
+            <Divider />
+            <MenuItem sx={{ color: 'error.main' }} onClick={run(async () => { if (await act.confirm(`Delete the pattern “${n}”?`, 'It moves to the trash folder inside your library (.specter/trash), so it can be got back.', 'Delete')) { await call('pattern_delete', { folder: ws, name: n }); bumpLibrary(); if (sel?.name === n) nav.replace({ item: undefined }); } })}>Delete…</MenuItem>
+          </Menu>
+        );
+      })()}
+      {patternExamples && (
+        <Dialog open onClose={() => setPatternExamples(false)} fullWidth maxWidth="sm">
+          <DialogTitle>Example patterns</DialogTitle>
+          <DialogContent>
+            <List component="div">
+              {EXAMPLE_PATTERNS.map((x) => (
+                <ListItemButton key={x.title} onClick={() => { setPatternExamples(false); void newPattern(x.text, x.title); }}>
+                  <ListItemText primary={x.title} secondary={x.text.split('\n')[0].replace(/^\/\/\s*/, '')} />
+                </ListItemButton>
+              ))}
+            </List>
+          </DialogContent>
+        </Dialog>
+      )}
       <NewEffect open={creating} onClose={() => setCreating(false)} onCreate={(n, t) => { setCreating(false); void newEffect(t, '', n); }} />
       {examples && (
         <Dialog open onClose={() => setExamples(null)} fullWidth maxWidth="md">
