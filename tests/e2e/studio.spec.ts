@@ -53,10 +53,6 @@ test.describe.configure({ mode: 'serial' });
 let page: Page;
 
 test.beforeAll(async ({ browser }) => {
-  // the story starts with no boards: a retry of this file (or a file before it) may have left boards in the shared
-  // device layer, which a first run would show (the script checker's own board stays)
-  for (const c of await deviceLayer<any[]>('connections')) if (c.key !== 'checker') await deviceLayer('disconnect', { key: c.key });
-  await expect.poll(async () => (await deviceLayer<any[]>('connections')).filter((c) => c.key !== 'checker').length).toBe(0);
   page = await (await browser.newContext({ viewport: { width: 1300, height: 900 }, baseURL: `http://localhost:${process.env.E2E_APP_PORT || '14232'}/` })).newPage();
   page.on('dialog', (d) => void d.accept(answers.shift() ?? ''));
 });
@@ -1104,12 +1100,7 @@ test('advanced mode shows the technical tools', async () => {
   expect(errors.filter((e) => /Tabs component is invalid/.test(e))).toEqual([]);
 });
 
-test.afterAll(async () => {
-  // this file's Studio page goes too: a page left open keeps talking to the shared device layer (and loading the
-  // browser) through every later file
-  await page?.context().close();
-  fs.rmSync(tmp, { recursive: true, force: true });
-});
+test.afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 test('serial monitor and plotter', async () => {
   // a pseudo-terminal stands in for a board: it prints numbers and echoes what it gets
@@ -1154,15 +1145,14 @@ test('plugins see boards only through the message API', async () => {
   const f = page.frameLocator('iframe[title="Board list (example plugin)"]');
   await expect(f.getByRole('heading', { name: 'Practice board 1' })).toBeVisible({ timeout: 15_000 });
   await f.getByRole('button', { name: 'Ask for its state' }).click();
-  // right after the reload Studio is reading every board again, so the board's answer can take a few seconds
-  await expect(f.getByRole('button', { name: /^Up \d+ s$|^No answer/ })).toHaveText(/^Up \d+ s$/, { timeout: 15_000 });
+  await expect(f.getByRole('button', { name: /^Up \d+ s$/ })).toBeVisible();
   // board-changing work goes through Studio, which asks the person first in its own dialog, showing the plugin and
   // the whole script; a no holds the plugin off, a yes sends it
   await f.getByRole('button', { name: 'Send a tiny test effect' }).click();
   const ask = page.getByRole('dialog', { name: /Board list \(example plugin\) \(board-list\) wants to replace the effect script on Practice board 1/ });
-  await expect(ask.getByTestId('plugin-script')).toContainText('wait for trig2', { timeout: 15_000 });
+  await expect(ask.getByTestId('plugin-script')).toContainText('wait for trig2');
   await ask.getByRole('button', { name: 'No' }).click();
-  await expect(f.getByRole('button', { name: 'Not sent: the person said no' })).toBeVisible({ timeout: 15_000 });
+  await expect(f.getByRole('button', { name: 'Not sent: the person said no' })).toBeVisible();
   await f.getByRole('button', { name: 'Not sent: the person said no' }).click();
   await expect(f.getByRole('button', { name: 'Not sent: the person said no; ask again later' })).toBeVisible();
   // opened again (Studio started again, a new page of the plugin), it may ask again
@@ -1175,7 +1165,7 @@ test('plugins see boards only through the message API', async () => {
     await expect(ask).toBeVisible({ timeout: 2000 });
   }).toPass({ timeout: 20_000 });
   await ask.getByRole('button', { name: 'Send this script' }).click();
-  await expect(f.getByRole('button', { name: 'Test effect sent' })).toBeVisible({ timeout: 15_000 });
+  await expect(f.getByRole('button', { name: 'Test effect sent' })).toBeVisible({ timeout: 10_000 });
   await page.getByRole('tab', { name: 'Boards' }).click();
   await expect(page.getByTestId('board-Practice board 1').getByTestId('script-badge')).toHaveText('Effect script not in your library', { timeout: 10_000 });
   await page.getByTestId('board-Practice board 1').getByRole('button', { name: 'Send an effect…' }).click();

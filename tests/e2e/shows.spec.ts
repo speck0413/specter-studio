@@ -58,9 +58,6 @@ test.beforeAll(async ({ browser }) => {
 });
 
 test.afterAll(async () => {
-  // this file's Studio page goes too: a page left open keeps talking to the shared device layer (and loading the
-  // browser) through every later file
-  await page?.context().close();
   await dl('disconnect', { key }).catch(() => {}); // the practice board goes (the other specs count boards)
   bridge.close();
   fs.rmSync(ws, { recursive: true, force: true });
