@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { allowedPlugins } from './consent';
+import { expectWhollyVisible, hoverWord } from './hover';
 
 const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'specter-tell-'));
 const FRONT = 'Front Door';
@@ -104,10 +105,10 @@ test('typeahead after tell: the other boards by network name and all, then the b
 });
 
 test('the help says how a tell line works', async () => {
-  const word = box().locator('.view-line span span').filter({ hasText: /^tell$/ }).first();
-  await word.hover();
+  await hoverWord(page, box(), 'tell');
   const hover = page.locator('.monaco-hover').filter({ hasText: 'Tells another board' });
   await expect(hover).toBeVisible({ timeout: 10_000 });
+  await expectWhollyVisible(hover);
   await expect(hover).toContainText('remote_free_effects');
   await expect(hover).toContainText('not saved');
   await page.mouse.move(0, 0);
