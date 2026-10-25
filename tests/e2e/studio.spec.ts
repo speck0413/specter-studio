@@ -53,6 +53,10 @@ test.describe.configure({ mode: 'serial' });
 let page: Page;
 
 test.beforeAll(async ({ browser }) => {
+  // the story starts with no boards: a retry of this file (or a file before it) may have left boards in the shared
+  // device layer, which a first run would show (the script checker's own board stays)
+  for (const c of await deviceLayer<any[]>('connections')) if (c.key !== 'checker') await deviceLayer('disconnect', { key: c.key });
+  await expect.poll(async () => (await deviceLayer<any[]>('connections')).filter((c) => c.key !== 'checker').length).toBe(0);
   page = await (await browser.newContext({ viewport: { width: 1300, height: 900 }, baseURL: `http://localhost:${process.env.E2E_APP_PORT || '14232'}/` })).newPage();
   page.on('dialog', (d) => void d.accept(answers.shift() ?? ''));
 });
@@ -1100,7 +1104,12 @@ test('advanced mode shows the technical tools', async () => {
   expect(errors.filter((e) => /Tabs component is invalid/.test(e))).toEqual([]);
 });
 
-test.afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+test.afterAll(async () => {
+  // this file's Studio page goes too: a page left open keeps talking to the shared device layer (and loading the
+  // browser) through every later file
+  await page?.context().close();
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
 
 test('serial monitor and plotter', async () => {
   // a pseudo-terminal stands in for a board: it prints numbers and echoes what it gets
@@ -1140,32 +1149,45 @@ while True:
 });
 
 test('plugins see boards only through the message API', async () => {
+  // A press in the plugin's frame right after it appears can be lost: the frame is sandboxed (a process of its own in
+  // Chrome), and a click that comes before Chrome can route input to it goes nowhere (traces: the button was there
+  // and the click landed on it, but its handler never ran). So each press here is repeated until its result shows,
+  // and only where pressing again changes nothing.
+  const pressUntil = async (press: () => Promise<unknown>, done: () => Promise<unknown>, timeout = 30_000) => {
+    await expect(async () => {
+      await press();
+      await done();
+    }).toPass({ timeout });
+  };
   await page.reload();
   await page.getByRole('tab', { name: 'Board list (example plugin)' }).click();
   const f = page.frameLocator('iframe[title="Board list (example plugin)"]');
   await expect(f.getByRole('heading', { name: 'Practice board 1' })).toBeVisible({ timeout: 15_000 });
-  await f.getByRole('button', { name: 'Ask for its state' }).click();
-  await expect(f.getByRole('button', { name: /^Up \d+ s$/ })).toBeVisible();
+  const up = f.getByRole('button', { name: /^Up \d+ s$/ });
+  await pressUntil(async () => { if (!(await up.isVisible())) await f.getByRole('button', { name: /^Ask for its state$|^No answer/ }).click({ timeout: 2000 }); },
+    () => expect(up).toBeVisible({ timeout: 5000 }));
   // board-changing work goes through Studio, which asks the person first in its own dialog, showing the plugin and
   // the whole script; a no holds the plugin off, a yes sends it
-  await f.getByRole('button', { name: 'Send a tiny test effect' }).click();
   const ask = page.getByRole('dialog', { name: /Board list \(example plugin\) \(board-list\) wants to replace the effect script on Practice board 1/ });
+  await pressUntil(async () => { if (!(await ask.isVisible())) await f.getByRole('button', { name: /^Send a tiny test effect$|^Not sent: Studio is already asking/ }).click({ timeout: 2000 }); },
+    () => expect(ask).toBeVisible({ timeout: 3000 }));
   await expect(ask.getByTestId('plugin-script')).toContainText('wait for trig2');
-  await ask.getByRole('button', { name: 'No' }).click();
-  await expect(f.getByRole('button', { name: 'Not sent: the person said no' })).toBeVisible();
-  await f.getByRole('button', { name: 'Not sent: the person said no' }).click();
-  await expect(f.getByRole('button', { name: 'Not sent: the person said no; ask again later' })).toBeVisible();
+  await pressUntil(async () => { if (await ask.isVisible()) await ask.getByRole('button', { name: 'No' }).click({ timeout: 2000 }); },
+    () => expect(ask).toBeHidden({ timeout: 3000 }));
+  await expect(f.getByRole('button', { name: 'Not sent: the person said no' })).toBeVisible({ timeout: 15_000 });
+  const later = f.getByRole('button', { name: 'Not sent: the person said no; ask again later' });
+  await pressUntil(async () => { if (!(await later.isVisible())) await f.getByRole('button', { name: 'Not sent: the person said no' }).click({ timeout: 2000 }); },
+    () => expect(later).toBeVisible({ timeout: 3000 }));
+  await expect(ask).toBeHidden();
   // opened again (Studio started again, a new page of the plugin), it may ask again
   await page.reload();
   await page.getByRole('tab', { name: 'Board list (example plugin)' }).click();
   await expect(f.getByRole('heading', { name: 'Practice board 1' })).toBeVisible({ timeout: 15_000 });
-  // the plugin draws its list again when the boards arrive: press until Studio asks (a press on a replaced button is lost)
-  await expect(async () => {
-    if (!(await ask.isVisible())) await f.getByRole('button', { name: /Not sent|Send a tiny/ }).click({ timeout: 2000 });
-    await expect(ask).toBeVisible({ timeout: 2000 });
-  }).toPass({ timeout: 20_000 });
-  await ask.getByRole('button', { name: 'Send this script' }).click();
-  await expect(f.getByRole('button', { name: 'Test effect sent' })).toBeVisible({ timeout: 10_000 });
+  await pressUntil(async () => { if (!(await ask.isVisible())) await f.getByRole('button', { name: /Not sent|Send a tiny/ }).click({ timeout: 2000 }); },
+    () => expect(ask).toBeVisible({ timeout: 3000 }));
+  await pressUntil(async () => { if (await ask.isVisible()) await ask.getByRole('button', { name: 'Send this script' }).click({ timeout: 2000 }); },
+    () => expect(ask).toBeHidden({ timeout: 3000 }));
+  await expect(f.getByRole('button', { name: 'Test effect sent' })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('tab', { name: 'Boards' }).click();
   await expect(page.getByTestId('board-Practice board 1').getByTestId('script-badge')).toHaveText('Effect script not in your library', { timeout: 10_000 });
   await page.getByTestId('board-Practice board 1').getByRole('button', { name: 'Send an effect…' }).click();

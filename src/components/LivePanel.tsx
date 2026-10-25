@@ -50,7 +50,10 @@ function SoundTile({ b, tile, heading }: { b: Board; tile: object; heading: obje
   const [volume, setVolume] = useState<number | null>(null);
   const [range, setRange] = useState({ min: 0, max: 30 });
   const [msg, setMsg] = useState<{ tone: 'error'; text: string } | null>(null);
+  // a repeat started here: stopped when the page closes. Counted from the click (not from the board's answer), so
+  // leaving the page before the board answered still stops it; `heard` is whether the board has said it plays since
   const repeating = useRef(false);
+  const heard = useRef(false);
   const now = soundNow(b.state, cardList);
   const chosen = choices.find((c) => c.n === pick) || (choices.length && pick === '' ? choices[0] : undefined);
   const n = chosen ? chosen.n : number;
@@ -77,8 +80,12 @@ function SoundTile({ b, tile, heading }: { b: Board; tile: object; heading: obje
     window.addEventListener('blur', u);
     return () => { window.removeEventListener('blur', u); u(); };
   }, []);
-  // the repeat ended some other way (Stop on the board, another sound): nothing of ours to stop any more
-  useEffect(() => { if (!now.playing) repeating.current = false; }, [now.playing]);
+  // the repeat ended some other way (Stop on the board, another sound): nothing of ours to stop any more. A "not
+  // playing" from before the board started the repeat (a late state message) does not count.
+  useEffect(() => {
+    if (now.playing) heard.current = true;
+    else if (heard.current) { heard.current = false; repeating.current = false; }
+  }, [now.playing]);
   const off = !b.online;
   return (
     <Card variant="outlined" data-testid="sound-tile" sx={{ borderLeft: 3, borderLeftColor: now.playing ? 'output.on' : 'output.off' }}>
@@ -95,10 +102,10 @@ function SoundTile({ b, tile, heading }: { b: Board; tile: object; heading: obje
             <TextField size="small" type="number" label="Sound" value={number} onChange={(e) => setNumber(clampSound(Number(e.target.value)))}
               slotProps={{ htmlInput: { min: 1, max: SOUND_MAX, 'aria-label': 'Sound number' } }} sx={{ width: 140 }} />
           )}
-          {choices.length === 0 && <Typography variant="body2" color="text.secondary">Sound 1 is the one file in the card's folder 01 (01/001-….mp3), the same as sound 1 in an effect script. The SD card tool puts your sounds there.</Typography>}
+          {choices.length === 0 && <Typography variant="body2" color="text.secondary">Sound 1 is the one file in the card's folder 01 (01/001-….mp3), the same sound 1 as “play sound 1” in an effect. The SD card tool puts your sounds there.</Typography>}
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
             <Button variant="outlined" disabled={off} onClick={async () => { repeating.current = false; await send(soundRequest.once(n)); }}>Play once</Button>
-            <Button variant="outlined" disabled={off} onClick={async () => { if (await send(soundRequest.repeat(n))) repeating.current = true; }}
+            <Button variant="outlined" disabled={off} onClick={async () => { repeating.current = true; heard.current = false; if (!(await send(soundRequest.repeat(n)))) repeating.current = false; }}
               title="Plays this sound again and again until you press Stop sound">Play on repeat</Button>
             <Button variant="outlined" color="error" disabled={off} onClick={async () => { repeating.current = false; await send(soundRequest.stop()); }}>Stop sound</Button>
           </Stack>

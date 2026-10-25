@@ -14,7 +14,6 @@ import Search from '@mui/icons-material/Search';
 import Check from '@mui/icons-material/Check';
 import { clampZoom, makeTheme, resolveTheme, THEME_IDS, THEMES, ThemePref, ZOOM_STEP } from './theme';
 import { Loc, NavContext, useHistory, useNav } from './nav';
-import { OPEN_PATTERNS } from './effects/language';
 import { useStore } from './store';
 import { call, onConnection } from './api';
 import { useBoardActions } from './components/actions';
@@ -121,13 +120,6 @@ export default function App() {
     openBoard: (key: string, tab?: string) => go({ view: 'boards', board: key, ...(tab ? { tab } : {}) }),
     openPalette: (text = '') => setPalette((p) => ({ open: true, text, n: p.open ? p.n : p.n + 1 })),
   }), [hist, go]);
-
-  // the `pixels` help's link (effects/language.ts): Your library, where the LED patterns are
-  useEffect(() => {
-    const open = () => go({ view: 'library' });
-    window.addEventListener(OPEN_PATTERNS, open);
-    return () => window.removeEventListener(OPEN_PATTERNS, open);
-  }, [go]);
 
   // ---- text size (zoom) and the theme
   const setZoom = useCallback((z: number) => setPrefs({ zoom: clampZoom(z) }), [setPrefs]);
@@ -281,10 +273,11 @@ export default function App() {
               onChange={(_, v) => go({ view: v })}>
               {[...top, ...bottom].map((v, i) => (
                 <Tab key={v.id} value={v.id} aria-label={v.label} data-testid={`activity-${v.id}`} sx={i === top.length ? { mt: 'auto' } : undefined}
-                  // the place you are in, clicked again: its start (all boards, the library's list)
+                  // the place you are in, clicked again: its start (all boards, the library's list). Its tooltip
+                  // (disableInteractive) lets clicks through to the side bar it covers and closes when the pointer leaves.
                   onClick={() => { if (v.id === loc.view && (loc.board || loc.item)) go({ view: v.id }); }}
                   label={
-                    <Tooltip placement="right" describeChild title={<><b>{v.label}</b>{v.keys ? ` (${keyLabel(v.keys)})` : ''}<br />{v.hint}</>}>
+                    <Tooltip placement="right" describeChild disableInteractive title={<><b>{v.label}</b>{v.keys ? ` (${keyLabel(v.keys)})` : ''}<br />{v.hint}</>}>
                       <Box component="span" className="act">{v.icon}<Box component="span" className="act-label">{v.short}</Box>{' '}</Box>
                     </Tooltip>
                   } />

@@ -1,13 +1,9 @@
 // An effect script as C++ for the firmware's beginner layer (Proptroller.h): each effect becomes one
 // `prop.when(TRIG1)...` sequence. Timing matches the script: steps start together unless a wait() moves the
 // time on, so `wait T` (or the older `sleep T`) is `.wait(T)` and a fade (which takes its time in a script) is followed by `.wait(T)`.
-// A `pixels` line is the library's pixel step (setPixels, chasePixels, ...); comet, sparkle, breathe and fire have
-// none, and pixel_speed is not applied (the steps take the effects' own times).
 // Lines the beginner layer has no step for (flicker, DMX, looping a named sound, a second wait for, the advanced
 // lines: limit, pulse, a time kept as a setting, a sound line above the first wait for) become comments, so
 // nothing is silently dropped.
-
-import { colourHex, splitPixels } from './words';
 
 const OUT = /^(out[1-4]|rly[12]|cc[12])$/;
 const IN = /^(trig[12]|user[1-3])$/;
@@ -42,32 +38,9 @@ export function percent(v: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-/**
- * `pixels = <effect> <colour>` as the library's pixel step, with the board's own times for the effect at
- * pixel_speed 100 % (pixels.h); comet, sparkle, breathe and fire have no step there (null: a comment).
- */
-export function pixelStep(rest: string): string | null {
-  const { effect, colour } = splitPixels(rest);
-  const e = (effect || 'fill').toLowerCase();
-  const hex = colour ? colourHex(colour) : 'ffffff';
-  if (!hex) return null;
-  const c = `rgb(${parseInt(hex.slice(0, 2), 16)}, ${parseInt(hex.slice(2, 4), 16)}, ${parseInt(hex.slice(4, 6), 16)})`;
-  switch (e) {
-    case 'off': return colour ? null : '.pixelsOff()';
-    case 'fill': return `.setPixels(${c})`;
-    case 'chase': return `.chasePixels(${c}, milliseconds(60))`;
-    case 'rainbow': return colour ? null : '.rainbowPixels(milliseconds(5000))';
-    case 'flash': return `.flashPixels(${c}, milliseconds(600))`;
-    case 'fade': return `.fadeInPixels(${c}, milliseconds(2000))`;
-    case 'flicker': return `.flickerPixels(${c})`;
-    default: return null;
-  }
-}
-
 function step(line: string): string | null {
   const s = line.toLowerCase();
   let m: RegExpMatchArray | null;
-  if ((m = line.match(/^pixels\s*[=:](.*)$/i))) return pixelStep(m[1]);
   if ((m = s.match(/^sleep\s*(.+)$/)) || (m = s.match(/^wait\s*(?:for\s*)?(\d.*)$/))) {
     const d = duration(m[1]);
     return d && `.wait(${d})`;

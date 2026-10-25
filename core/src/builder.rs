@@ -206,9 +206,7 @@ pub fn merge_pico(app_build: &Path, board: &str, events: &broadcast::Sender<Even
     if !out.status.success() {
         return Err(format!("the Pico bootloader did not build: {}", String::from_utf8_lossy(&out.stdout).lines().rev().find(|l| l.contains("rror")).unwrap_or("")));
     }
-    let python = crate::flash::pio_home().join(if cfg!(windows) { "penv/Scripts/python.exe" } else { "penv/bin/python" });
-    let python = if python.exists() { python } else { PathBuf::from(if cfg!(windows) { "python" } else { "python3" }) };
-    let out = Command::new(python)
+    let out = Command::new(crate::flash::pio_python())
         .arg(root.join("tools/picoboot_image.py"))
         .args(["merge", name, "--app-build"])
         .arg(app_build)

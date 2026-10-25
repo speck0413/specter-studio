@@ -3,7 +3,6 @@
 // only on and off; after `wait for` the inputs by their names; after a sound line the sounds; in a time the units
 // and the settings that may stand for a time (SS-G6). The names come from terms.ts (the board, else the defaults).
 import { getTerms, outputDims, shown, Term, Terms } from './terms';
-import { NO_COLOUR, PIXEL_COLOURS, PIXEL_EFFECTS } from './words';
 
 export interface Completion {
   label: string;
@@ -12,7 +11,7 @@ export interface Completion {
   detail: string;
   /** what typing is matched against, when not the label */
   filter?: string;
-  kind: 'line' | 'level' | 'terminal' | 'unit' | 'setting' | 'sound' | 'word' | 'colour';
+  kind: 'line' | 'level' | 'terminal' | 'unit' | 'setting' | 'sound' | 'word';
   /** open the suggestions again after it is inserted (`out1 = ` goes on to the levels) */
   retrigger?: boolean;
 }
@@ -37,7 +36,6 @@ export function lineStarts(): Completion[] {
     line('audio_loop = off', 'audio_loop = off', 'end the background sound'),
     line('audio_volume', 'audio_volume = ${1:60%}', 'how loud the script\'s sounds play (0% to 100%)'),
     line('audio_stop', 'audio_stop', 'stop the sound'),
-    line('pixels', 'pixels = ', 'light the LED strip: an effect, then a colour', true),
   ];
 }
 
@@ -85,23 +83,6 @@ const TIME_SLOTS = [
 ];
 const AFTER_NUMBER = re(String.raw`^\s*(?:(?:wait\s*for|wait|sleep)|fade\s+\S+\s+to\s+\S+\s+over|(?:flicker|pulse)\s+\S+\s+for|limit\s+\S+\s+runs?\s+per)\s+${NUM}\s+[a-z]*$`);
 
-const EFFECT_DETAIL: Record<string, string> = {
-  off: 'the strip dark', fill: 'the whole strip in one colour', chase: 'a few lit pixels running along', rainbow: 'a moving rainbow (its own colours)',
-  flash: 'on and off', fade: 'in from dark, then stays', flicker: 'like a failing bulb', comet: 'a head with a fading tail',
-  sparkle: 'random pixels flash and fade', breathe: 'slowly up and down', fire: 'red, orange and yellow flames (its own colours)',
-};
-/** The pixel effects (each going on to the colours, unless it has its own), then the colours alone (a fill). */
-export function pixelEffects(): Completion[] {
-  return PIXEL_EFFECTS.map((e) => ({ label: e, insert: NO_COLOUR.includes(e) ? e : `${e} `, snippet: false, detail: EFFECT_DETAIL[e] || 'a pixel effect', kind: 'word' as const, retrigger: !NO_COLOUR.includes(e) }));
-}
-/** The named colours and an exact one (0xRRGGBB, with its digits selected). */
-export function pixelColours(): Completion[] {
-  return [
-    ...PIXEL_COLOURS.map(([n, hex]): Completion => ({ label: n, insert: n, snippet: false, detail: `#${hex}`, kind: 'colour' })),
-    { label: 'exact colour', insert: '0x${1:ff8000}', snippet: true, detail: '0x and six hex digits (red, green, blue): 0xff8000 is orange', filter: 'exact colour 0x', kind: 'colour' },
-  ];
-}
-
 /** What fits after `before` (the line up to the cursor). */
 export function completionsAt(before: string, terms: Terms = getTerms()): Completion[] {
   const b = before.replace(/[\t  ]/g, ' ');
@@ -116,18 +97,6 @@ export function completionsAt(before: string, terms: Terms = getTerms()): Comple
     if (!list.length) list.push({ label: 'sound number', insert: '${1:1}', snippet: true, detail: 'the sound\'s number, 1 to 99 (folder 02 is 2): type it', kind: 'sound' });
     if (loop) list.push(word('off', 'end the background sound'));
     return list;
-  }
-  // pixels = <effect> <colour>: first the effects (and the colours, which fill the strip), then the colours
-  if ((m = /^\s*pixels\s*[=:]\s*(.*)$/i.exec(b))) {
-    const typed = m[1];
-    const w = /^(\S+)\s+(\S*)$/.exec(typed);
-    if (w) {
-      const e = w[1].toLowerCase();
-      if (!PIXEL_EFFECTS.includes(e) || NO_COLOUR.includes(e)) return [];
-      return pixelColours();
-    }
-    if (/\s/.test(typed.trim())) return [];
-    return [...pixelEffects(), ...pixelColours()];
   }
   // a number in a time: its unit
   if (AFTER_NUMBER.test(b)) return units();
@@ -156,7 +125,7 @@ export function completionsAt(before: string, terms: Terms = getTerms()): Comple
   if (/^\s*fade\s+\S+\s+to\s+\S+\s+\S*$/i.test(b)) return [word('over', 'how long the fade takes')];
   if (/^\s*(flicker|pulse)\s+\S+\s+\S*$/i.test(b)) return [word('for', 'how long')];
   // <output> = level
-  if ((m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*[=:]\s*(\S*)$/.exec(b)) && !/^(wait|effect|sleep|limit|pixels)$/i.test(m[1]) && !/^(wait|effect|sleep|limit)/i.test(m[1])) return numberLevel(terms, m[1], m[2]) ?? levels(terms, m[1]);
+  if ((m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*[=:]\s*(\S*)$/.exec(b)) && !/^(wait|effect|sleep|limit)/i.test(m[1])) return numberLevel(terms, m[1], m[2]) ?? levels(terms, m[1]);
   // the start of a line: its kinds, and setting an output
   if (/^\s*[A-Za-z_]*$/.test(b)) {
     const sets: Completion[] = terms.outputs.map((o) => ({
