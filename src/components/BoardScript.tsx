@@ -145,7 +145,7 @@ export default function BoardScript({ boardKey, dark }: { boardKey: string; dark
           <Button disabled={!b.online} onClick={async () => { const n = await act.pickEffect(`Send an effect to ${boardName}`); if (n) await act.sendEffect(boardKey, n); }}>Send another effect from Your library…</Button>
         </>}
       </Box>
-      <ScriptEditor text={text} onChange={edit} dark={dark} gotoName={gotoName} checkWith={boardKey} onCheck={setCheck} height="clamp(320px, 52vh, 720px)"
+      <ScriptEditor text={text} onChange={edit} dark={dark} gotoName={gotoName} checkWith={boardKey} self={boardKey} onCheck={setCheck} height="clamp(320px, 52vh, 720px)"
         footer={!b.online && <Typography variant="body2" color="text.secondary">{boardName} is not answering; you can send once it answers again.</Typography>} />
       {compare && <ScriptCompare name={name} boardName={boardName} boardText={text} libraryText={compare.library} librarySaved={compare.saved} dark={dark}
         onClose={() => setCompare(null)}

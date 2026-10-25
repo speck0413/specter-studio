@@ -20,7 +20,7 @@ import { conflicts, missingHint } from '../words';
 const GOLDEN = process.env.SHOW_SCRIPT_GOLDEN || path.resolve(__dirname, '../../firmware/firmware/show-script-golden');
 
 interface Msg { line: number; message: string }
-interface Step { line: number; op: string; input?: string; target?: string; level?: number; ms?: number; sound?: number; setting?: string }
+interface Step { line: number; op: string; input?: string; target?: string; level?: number; ms?: number; sound?: number; setting?: string; board?: string; effect?: string; value?: string }
 interface Case { name: string; text: string; settings: Record<string, unknown>; check: { ok: boolean; errors: Msg[]; warnings: Msg[]; table?: { effects: { name: string; line: number; steps: Step[] }[] } } }
 
 function cases(): Case[] {
@@ -44,7 +44,7 @@ const blank = (raw: string) => !raw.replace(/[\t  ]/g, ' ').split('#')[0].tri
 const KIND: Record<string, string> = {
   wait_for: 'ps_wait', set: 'ps_set', sleep: 'ps_sleep', fade: 'ps_fade', flicker: 'ps_flicker',
   audio_single: 'ps_audio_single', audio_loop: 'ps_audio_loop', audio_stop: 'ps_audio_stop', pulse: 'ps_pulse', audio_loop_off: 'ps_audio_loop',
-  audio_volume: 'ps_audio_volume', pixels: 'ps_pixels',
+  audio_volume: 'ps_audio_volume', pixels: 'ps_pixels', tell: 'ps_tell',
 };
 // the advanced line that adds no step (SHOW-SCRIPT.md): its block
 const DECL = /^\s*limit\b/i;
@@ -89,6 +89,9 @@ describe('Studio reads every golden script as the board does', () => {
         if (p.type !== KIND[s.op]) wrong.push(`line ${n} ${JSON.stringify(raw)}: the board reads ${s.op}, blocks read ${p.type}`);
         else if (s.input && squash(p.f.INPUT) !== s.input.toLowerCase()) wrong.push(`line ${n}: input ${s.input}, blocks ${p.f.INPUT}`);
         else if (s.target && squash(p.f.TARGET) !== s.target.toLowerCase()) wrong.push(`line ${n}: target ${s.target}, blocks ${p.f.TARGET}`);
+        else if (s.op === 'tell' && p.f.BOARD.toLowerCase() !== s.board) wrong.push(`line ${n}: tells ${s.board}, blocks ${p.f.BOARD}`);
+        else if (s.op === 'tell' && s.effect && p.f.DO.toLowerCase().replace(/ +/g, '_') !== s.effect) wrong.push(`line ${n}: effect ${s.effect}, blocks ${p.f.DO}`);
+        else if (s.setting && s.op === 'tell' && squash(p.f.DO.split(/[=:]/)[0]) !== s.setting) wrong.push(`line ${n}: setting ${s.setting}, blocks ${p.f.DO}`);
       }
     });
     expect(wrong).toEqual([]);

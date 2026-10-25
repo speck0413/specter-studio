@@ -11,7 +11,7 @@ import * as Blockly from 'blockly';
 import { registerFields } from './fields';
 import { splitPixels } from './words';
 
-const COLOURS = { effect: 30, wait: 200, set: 120, time: 260, sound: 330, pixels: 290, note: '#6d6d6d' };
+const COLOURS = { effect: 30, wait: 200, set: 120, time: 260, sound: 330, pixels: 290, tell: 175, note: '#6d6d6d' };
 const defs = [
   { type: 'ps_effect', message0: 'effect %1 :', args0: [{ type: 'field_input', name: 'NAME', text: 'my effect' }],
     message1: '%1', args1: [{ type: 'input_statement', name: 'LINES' }], previousStatement: null, nextStatement: null, colour: COLOURS.effect,
@@ -39,6 +39,10 @@ const defs = [
     tooltip: 'How loud the script\'s sounds play from here on: 0% (silent) to 100%.' },
   { type: 'ps_pixels', message0: 'light the pixels %1 %2', args0: [{ type: 'field_ps_choice', name: 'EFFECT', kind: 'pixeleffect', text: 'rainbow' }, { type: 'field_ps_choice', name: 'COLOUR', kind: 'pixelcolour', text: '' }], previousStatement: null, nextStatement: null, colour: COLOURS.pixels,
     tooltip: 'Lights the LED strip with an effect and a colour until another pixels line. rainbow and fire have their own colours. To colour every light your own way, write an LED pattern in Your library.' },
+  // tell <board> <effect> / tell <board> <setting> = <value> (SHOW-SCRIPT.md §11): the firmware's own block (web/blocks.js
+  // ps_tell), plain text fields since the other board's effects and settings are checked there, not here
+  { type: 'ps_tell', message0: 'tell %1 %2', args0: [{ type: 'field_input', name: 'BOARD', text: 'porch' }, { type: 'field_input', name: 'DO', text: 'blackout' }], previousStatement: null, nextStatement: null, colour: COLOURS.tell,
+    tooltip: 'Tells another board (its network name, or all) to start one of its effects, or to use a setting: blackout, or pixel_speed = 150. The line does not wait.' },
   { type: 'ps_comment', message0: '# %1', args0: [{ type: 'field_input', name: 'TEXT', text: '' }], previousStatement: null, nextStatement: null, colour: COLOURS.note,
     tooltip: 'A comment or a blank line: the board skips it.' },
   { type: 'ps_raw', message0: 'line %1', args0: [{ type: 'field_input', name: 'TEXT', text: '' }], previousStatement: null, nextStatement: null, colour: 0,
@@ -46,7 +50,7 @@ const defs = [
 ];
 const FIELDS = {
   ps_effect: ['NAME'], ps_wait: ['INPUT'], ps_set: ['TARGET', 'LEVEL'], ps_sleep: ['TIME'], ps_fade: ['TARGET', 'LEVEL', 'TIME'],
-  ps_flicker: ['TARGET', 'TIME'], ps_pulse: ['TARGET', 'TIME'], ps_limit: ['RUNS', 'TIME'], ps_audio_single: ['SOUND'], ps_audio_loop: ['SOUND'], ps_audio_stop: [], ps_audio_volume: ['VOLUME'], ps_pixels: ['EFFECT', 'COLOUR'], ps_comment: ['TEXT'], ps_raw: ['TEXT'],
+  ps_flicker: ['TARGET', 'TIME'], ps_pulse: ['TARGET', 'TIME'], ps_limit: ['RUNS', 'TIME'], ps_audio_single: ['SOUND'], ps_audio_loop: ['SOUND'], ps_audio_stop: [], ps_audio_volume: ['VOLUME'], ps_pixels: ['EFFECT', 'COLOUR'], ps_tell: ['BOARD', 'DO'], ps_comment: ['TEXT'], ps_raw: ['TEXT'],
 };
 
 // ---------------------------------------------------------------- one line → kind and fields
@@ -95,6 +99,13 @@ export function parse(raw) {
     const part = plain ? r : low;
     const i = part.indexOf(':');
     return { type: 'ps_effect', f: { NAME: (i >= 0 ? part.slice(0, i) : part).trim() }, p, colon: i >= 0, tail: i >= 0 ? part.slice(i + 1) : '' };
+  }
+  // tell <board> <effect> / tell <board> <setting> = <value>: before the output line (it may hold "="), as web/blocks.js
+  if ((r = kw(low, 'tell')) !== null) {
+    const m = r.match(/^ +([^ =:]+) +(\S.*)$/);
+    if (m) return { type: 'ps_tell', f: { BOARD: m[1], DO: m[2].trim() }, p };
+    // the board reads any line that starts with the word tell as a tell line (M-tellform), never an output
+    if (r === '' || /^[ =:]/.test(r)) return { type: 'ps_raw', f: { TEXT: s }, p };
   }
   // wait <time> and wait for <time> are a time block, wait for <input> an input block (after wait for, a time
   // starts with a digit or is a time setting; after a bare wait, any word but an input; the board decides names)
@@ -163,6 +174,7 @@ function lineOf(type, f) {
     case 'ps_audio_stop': return 'audio_stop';
     case 'ps_audio_volume': return `audio_volume = ${f.VOLUME}`;
     case 'ps_pixels': return `pixels = ${[f.EFFECT, f.COLOUR].map((x) => (x || '').trim()).filter(Boolean).join(' ')}`.trimEnd();
+    case 'ps_tell': return `tell ${(f.BOARD || '').trim()} ${(f.DO || '').trim()}`.trimEnd();
     case 'ps_comment': return f.TEXT ? `# ${f.TEXT}` : '';
     default: return f.TEXT || '';
   }
@@ -313,6 +325,7 @@ export const TOOLBOX = {
     { kind: 'block', type: 'ps_audio_stop' },
     { kind: 'block', type: 'ps_audio_volume' },
     { kind: 'block', type: 'ps_pixels' },
+    { kind: 'block', type: 'ps_tell' },
     { kind: 'block', type: 'ps_comment' },
   ],
 };

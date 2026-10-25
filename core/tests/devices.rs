@@ -739,3 +739,58 @@ async fn an_allowed_plugin_offers_board_packages_profiles_and_scripts() {
     assert!(studio_core::fsimage::image_package("esp32-devkit", &fs).unwrap().0.contains("relay-board"));
     let _ = std::fs::remove_dir_all(root);
 }
+
+/// Practice boards tell each other out of the box (SHOW-SCRIPT.md §11): each started with only a name gets an id
+/// and a UDP port of its own in the practice boards' link relay (sim.rs), so a board started later is reached too,
+/// and a board that stops leaves the relay (other tests start practice boards at the same time, so the relay's
+/// seats are checked with a port no board has).
+#[tokio::test(flavor = "multi_thread")]
+async fn practice_boards_tell_each_other() {
+    if no_simulator_here() {
+        return;
+    }
+    let s = Studio::new();
+    let start = |name: &'static str| {
+        let s = &s;
+        async move { s.dispatch("sim_start", json!({ "name": name })).await.expect("simulator starts")["key"].as_str().unwrap().to_string() }
+    };
+    let out1 = |key: String| {
+        let s = &s;
+        async move { rpc(s, &key, json!({ "op": "state" })).await["result"]["outputs"].as_array().unwrap().iter().find(|o| o["channel"] == "OUT1").unwrap()["level"].as_i64().unwrap() }
+    };
+    let front = start("Relay Front").await;
+    let porch = start("Relay Porch").await;
+    let a = rpc(&s, &front, json!({ "op": "info" })).await["result"]["id"].clone();
+    let b = rpc(&s, &porch, json!({ "op": "info" })).await["result"]["id"].clone();
+    assert_ne!(a, b, "every practice board has an id of its own");
+    let doorbell = "effect doorbell:\n  wait for trig1\n  tell relay-porch blackout\n  tell relay-crypt blackout\n  wait 1\n";
+    let blackout = "effect blackout:\n  wait for trig1\n  out1 = on\n  wait 3\n  out1 = off\n";
+    assert_eq!(rpc(&s, &front, json!({ "op": "set_script", "text": doorbell })).await["result"]["ok"], true);
+    // a board started after the first two is reached as well
+    let crypt = start("Relay Crypt").await;
+    for k in [&porch, &crypt] {
+        assert_eq!(rpc(&s, k, json!({ "op": "set_script", "text": blackout })).await["result"]["ok"], true);
+        assert_eq!(rpc(&s, k, json!({ "op": "set_params", "values": [{ "key": "remote_free_effects", "value": "blackout" }] })).await["ok"], true);
+    }
+    tokio::time::sleep(Duration::from_millis(2500)).await; // the boot lockout
+    rpc(&s, &front, json!({ "op": "sim_input", "input": "TRIG1", "active": true })).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    rpc(&s, &front, json!({ "op": "sim_input", "input": "TRIG1", "active": false })).await;
+    let mut lit = (false, false);
+    for _ in 0..40 {
+        lit = (out1(porch.clone()).await == 1000, out1(crypt.clone()).await == 1000);
+        if lit == (true, true) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!(lit, (true, true), "both practice boards started the blackout");
+    let relay = studio_core::sim::relay().unwrap();
+    let seat = relay.seat(1);
+    assert!(relay.ports().contains(&1));
+    drop(seat);
+    assert!(!relay.ports().contains(&1));
+    for k in [front, porch, crypt] {
+        let _ = s.dispatch("disconnect", json!({ "key": k })).await;
+    }
+}

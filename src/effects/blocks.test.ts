@@ -62,6 +62,41 @@ describe('effect script blocks', () => {
   });
 });
 
+describe('the tell block (SHOW-SCRIPT.md §11, the firmware\'s ps_tell)', () => {
+  it('reads a tell line as the board does: the board, then an effect or a setting', () => {
+    expect(parse('  tell porch blackout').f).toEqual({ BOARD: 'porch', DO: 'blackout' });
+    expect(parse('  TELL  Front-Door   Porch Light  # its name has a space').f).toEqual({ BOARD: 'Front-Door', DO: 'Porch Light' });
+    expect(parse('tell all pixel_speed = 150').f).toEqual({ BOARD: 'all', DO: 'pixel_speed = 150' });
+    expect(parse('tell porch title: Hello Porch').type).toBe('ps_tell');
+    // a line the board refuses in its form is a plain line (Check says why)
+    expect(parse('tell porch=blackout').type).toBe('ps_raw');
+    expect(parse('tell porch').type).toBe('ps_raw');
+    expect(parse('tell').type).toBe('ps_raw');
+  });
+  it('a changed tell block writes its plain form; an unchanged one keeps its line', () => {
+    const ws = new Blockly.Workspace();
+    const text = 'effect a:\n  wait for trig1\n  tell  porch   blackout   # dark\n  tell all pixel_speed=150\n';
+    textToBlocks(ws, text);
+    expect(blocksToText(ws)).toBe(text);
+    const tells = ws.getAllBlocks(true).filter((b) => b.type === 'ps_tell');
+    expect(tells.map((b) => b.toString())).toEqual(['tell porch blackout', 'tell all pixel_speed=150']);
+    tells[0].setFieldValue('bright', 'DO');
+    tells[1].setFieldValue('front-door', 'BOARD');
+    expect(blocksToText(ws)).toBe('effect a:\n  wait for trig1\n  tell porch bright   # dark\n  tell front-door pixel_speed=150\n');
+    ws.dispose();
+  });
+  it('a new tell block from the toolbox writes a line the board takes', () => {
+    const ws = new Blockly.Workspace();
+    textToBlocks(ws, 'effect a:\n  wait for trig1\n');
+    const effect = ws.getAllBlocks(false).find((b) => b.type === 'ps_effect')!;
+    const wait = effect.getInputTargetBlock('LINES')!;
+    const tell = ws.newBlock('ps_tell');
+    wait.nextConnection!.connect(tell.previousConnection!);
+    expect(blocksToText(ws)).toBe('effect a:\n  wait for trig1\n  tell porch blackout\n');
+    ws.dispose();
+  });
+});
+
 describe('blank lines in the blocks view', () => {
   const text = '\n\neffect a:\n  wait for trig1\n\n  out1 = on\n  \n\n  # note\n  sleep 1\n\n';
   it('makes no block for a blank line', () => {

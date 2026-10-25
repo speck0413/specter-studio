@@ -12,6 +12,7 @@ import { setupMonaco } from './monaco';
 import { keepOneIndent, LANG_ID, markersFromCheck } from './language';
 import BlocksView, { BlocksApi } from './BlocksView';
 import { setTerms, Sound, soundList, termsFor } from './terms';
+import { fleetFrom, setFleet } from './fleet';
 import { editorView, showsBlocks, showsScript } from '../editorView';
 import { checkHint } from '../words';
 import { GOTO_LINE } from '../components/actions';
@@ -20,7 +21,7 @@ setupMonaco();
 
 export interface ScriptCheck { ok: boolean; effects?: number; errors: any[]; warnings: any[] }
 
-export default function ScriptEditor({ text, onChange, dark, gotoName, checkWith = '', onCheck, height = 460, footer }: {
+export default function ScriptEditor({ text, onChange, dark, gotoName, checkWith = '', self = '', onCheck, height = 460, footer }: {
   text: string;
   onChange: (v: string) => void;
   dark: boolean;
@@ -28,6 +29,8 @@ export default function ScriptEditor({ text, onChange, dark, gotoName, checkWith
   gotoName: string;
   /** the board whose settings the checker starts with ('' = a board with factory settings) */
   checkWith?: string;
+  /** the board this script is for, when it is one board's own script: its tell lines never name it */
+  self?: string;
   onCheck?: (c: ScriptCheck | null) => void;
   height?: number | string;
   /** shown under the checker's messages, beside "Check with the settings of" */
@@ -119,6 +122,23 @@ export default function ScriptEditor({ text, onChange, dark, gotoName, checkWith
     const boardSounds = soundList((termsBoard?.script as any)?.sounds);
     setTerms(termsFor(termsBoard?.info, profile, soundNames.length ? soundNames : boardSounds));
   }, [termsBoard?.info, profile, soundNames, termsBoard?.script]);
+
+  // the other boards a tell line can name, their effects and the settings they take (fleet.ts): set only when that
+  // list changes; each board's settings are read once, and again after they changed (paramsSeq)
+  const [tellParams, setTellParams] = useState<Record<string, { seq: number; params: any[] }>>({});
+  const askFor = Object.values(boards).filter((b) => b.online && !b.adapter && b.key !== self).map((b) => `${b.key}\n${b.paramsSeq || 0}`).join('\t');
+  useEffect(() => {
+    for (const item of askFor ? askFor.split('\t') : []) {
+      const [key, seq] = item.split('\n');
+      if (tellParams[key]?.seq === Number(seq)) continue;
+      rpc(key, { op: 'get_params' }).then((r: any) => {
+        if (r?.ok && Array.isArray(r.result?.params)) setTellParams((all) => ({ ...all, [key]: { seq: Number(seq), params: r.result.params } }));
+      }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askFor]);
+  const fleetKey = JSON.stringify(fleetFrom(boards, self, Object.fromEntries(Object.entries(tellParams).map(([k, v]) => [k, v.params]))));
+  useEffect(() => setFleet(JSON.parse(fleetKey)), [fleetKey]);
 
   const errors = check?.errors || [];
   const warnings = check?.warnings || [];
