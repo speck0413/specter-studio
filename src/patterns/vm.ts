@@ -34,7 +34,7 @@ export interface PatternLimits {
   depth: number;
   /** the values (parameters and `var`s) of every function running at once */
   locals: number;
-  /** list values made in all while the pattern runs (lists are never given back) */
+  /** list values made in all while the pattern runs, one more per list (lists are never given back) */
   cells: number;
   /** steps one frame (or one control change) may take */
   steps: number;
@@ -183,9 +183,10 @@ export class PatternVM {
     if (v instanceof PList) return v;
     this.fail(pc, 'this needs a list (make one with array(n) or [1, 2, 3])');
   }
+  // a list takes its values and one more (a board keeps its length there)
   private newList(len: number, pc: number): PList {
-    if (this.cells + len > this.limits.cells) this.fail(pc, `the pattern's lists are too big (at most ${this.limits.cells} values in all: make lists once, at the top of the pattern)`);
-    this.cells += len;
+    if (this.cells + len + 1 > this.limits.cells) this.fail(pc, `the pattern's lists are too big (at most ${this.limits.cells} values in all: make lists once, at the top of the pattern)`);
+    this.cells += len + 1;
     return new PList(new Array(len).fill(0));
   }
 
