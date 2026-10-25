@@ -88,7 +88,7 @@ export function colourPopup(field: Blockly.Field<string>) {
   const start = colourHex(field.getValue() || '') ?? 'ff8000';
   field.setValue(`0x${start}`);
   popup(field, 'Exact colour', (box) => {
-    const pick = el('input', { type: 'color', value: `#${start}`, 'aria-label': 'Exact colour', style: 'width:64px;height:32px;padding:0;border:none;background:none;cursor:pointer' });
+    const pick = el('input', { type: 'color', value: `#${start}`, 'aria-label': 'Pick the exact colour', style: 'width:64px;height:32px;padding:0;border:none;background:none;cursor:pointer' });
     const text = el('span', { textContent: `0x${start}`, style: 'font-family:monospace' });
     pick.addEventListener('input', () => { const v = `0x${pick.value.slice(1).toLowerCase()}`; text.textContent = v; field.setValue(v); });
     box.append(el('label', { style: ROW_CSS }, pick, text));
