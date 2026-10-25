@@ -213,7 +213,8 @@ Duplicate…, Delete…). Opening one shows its code (Monaco) beside a live prev
 - **Built-in pixel effects in scripts.** The show script's own `pixels = <effect> <colour>` (firmware SHOW-SCRIPT.md
   §10) is a "light the pixels" block (an effect menu: off, fill, chase, rainbow, flash, fade, flicker, comet,
   sparkle, breathe, fire, or a colour alone; a colour menu: the named colours, or "exact colour…", a colour picker
-  that writes `0xRRGGBB`), typeahead after `pixels = ` (effects, then colours), hover help (its link opens Your
+  that writes `0xRRGGBB`; after rainbow and fire only "its own colours", after off only "no colour (dark)", and a
+  colour written after one of them is kept and marked as the board's checker says it), typeahead after `pixels = ` (effects, then colours), hover help (its link opens Your
   library, where the patterns are) and a C++ step (`setPixels`, `chasePixels`, `rainbowPixels`, `flashPixels`,
   `fadeInPixels`, `flickerPixels`, `pixelsOff` with the board's own times; comet, sparkle, breathe and fire stay a
   comment). The words (keywords, outputs, inputs, levels, units, settings, effects, colours) are the firmware's

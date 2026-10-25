@@ -199,8 +199,10 @@ function baseOptions(kind: ChoiceKind, field: Blockly.Field<any>): Option[] {
     case 'loop': return [...t.sounds.map(soundOption), ['off (no background sound)', 'off'], ['another number…', NUMBER]];
     case 'pixeleffect': return [...PIXEL_EFFECTS.map((e): Option => [e, e]), ['colour only (fills the strip)', '']];
     case 'pixelcolour': {
-      const own = NO_COLOUR.includes(effectOf(field).toLowerCase());
-      return [[own ? 'its own colours' : 'no colour (white)', ''], ...PIXEL_COLOURS.map(([n]): Option => [n, n]), ['exact colour…', EXACT]];
+      // rainbow and fire have their own colours, off none (SS-X2): the menu offers no colour for them
+      const effect = effectOf(field).trim().toLowerCase();
+      if (NO_COLOUR.includes(effect)) return [[effect === 'off' ? 'no colour (dark)' : 'its own colours', '']];
+      return [['no colour (white)', ''], ...PIXEL_COLOURS.map(([n]): Option => [n, n]), ['exact colour…', EXACT]];
     }
   }
 }
@@ -233,6 +235,10 @@ export function choiceOptions(kind: ChoiceKind, field: Blockly.Field<any>, value
   // pixel effects and colours: any case and spacing take their entry's place (`Sparkle`, `Warm  White`); an exact
   // colour is shown as written; anything else is kept and marked
   if (kind === 'pixeleffect' || kind === 'pixelcolour') {
+    // a colour written after an effect that takes none (`pixels = fire red`): kept, and marked as the board's
+    // checker says it
+    const effect = kind === 'pixelcolour' ? effectOf(field).trim().toLowerCase() : '';
+    if (value.trim() && NO_COLOUR.includes(effect)) return [[`${value.trim()} (${effect} takes no colour)`, value], ...base];
     const key = value.trim().toLowerCase().replace(/\s+/g, ' ');
     const i = base.findIndex(([, v]) => v !== EXACT && v === key);
     if (i >= 0) { const copy = base.slice(); copy[i] = [base[i][0], value]; return copy; }
@@ -268,6 +274,11 @@ export class ChoiceField extends Blockly.FieldDropdown {
     this.setValue(value);
   }
   static fromJson(o: any) { return new ChoiceField(o.kind, o.text ?? ''); }
+  // the colour's menu and words follow the effect (rainbow and fire have their own colours, off none)
+  protected doValueUpdate_(v: string) {
+    super.doValueUpdate_(v);
+    if (this.kind === 'pixeleffect') this.getSourceBlock()?.getField('COLOUR')?.forceRerender();
+  }
   getOptions(): any[] { return choiceOptions(this.kind, this, this.getValue() ?? ''); }
   // any text is kept as written; the menu is what is limited
   protected doClassValidation_(v?: string): string | null { return typeof v === 'string' && !v.startsWith('\u0000') ? v : null; }

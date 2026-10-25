@@ -1,6 +1,7 @@
 // The pixel strip in effect scripts (`pixels = <effect> <colour>`): the board's checker takes it, the "light the
-// pixels" block picks an effect and a colour (also an exact one with the colour picker), typeahead after
-// `pixels = `, the help links to LED patterns, and the pattern page says sending is coming.
+// pixels" block picks an effect and a colour (also an exact one with the colour picker) and offers no colour after
+// rainbow, fire or off, typeahead after `pixels = `, the help links to LED patterns, and the pattern page says
+// sending is coming.
 import { test, expect, Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -81,6 +82,29 @@ test('the block picks an effect and an exact colour', async () => {
   await expect(page.getByTestId('check')).toContainText('Looks good', { timeout: 10_000 });
 });
 
+test('the block offers no colour after an effect that takes none', async () => {
+  const views = page.getByTestId('editor-view');
+  await views.getByRole('button', { name: 'Blocks only' }).click();
+  const blocks = page.getByTestId('blocks');
+  const breathe = blocks.locator('.blocklyBlockCanvas g[data-id]').filter({ hasText: /light\sthe\spixels\s*breathe/ }).last();
+  await expect(breathe).toBeVisible();
+  // the same block after its effect changes
+  const block = blocks.locator(`.blocklyBlockCanvas g[data-id="${await breathe.getAttribute('data-id')}"]`);
+  const fields = block.locator('.blocklyEditableField, .blocklyEditableText');
+  const menu = page.locator('.blocklyDropDownDiv');
+  const menuItem = (name: string) => menu.getByRole('option', { name, exact: true });
+  await fields.filter({ hasText: /^breathe/ }).click();
+  await menuItem('fire').click();
+  // the colour written before is kept and marked; the menu offers only the effect's own colours
+  await fields.filter({ hasText: /^purple\s\(fire\stakes\sno\scolour\)/ }).click();
+  await expect(menuItem('its own colours')).toBeVisible();
+  for (const name of ['red', 'warm white', 'exact colour…', 'no colour (white)']) await expect(menuItem(name)).toHaveCount(0);
+  await menuItem('its own colours').click();
+  await views.getByRole('button', { name: 'Script and blocks' }).click();
+  await expect.poll(text).toContain('  pixels = fire\n  wait for trig1\n');
+  await expect(page.getByTestId('check')).toContainText('Looks good', { timeout: 10_000 });
+});
+
 test('typeahead after pixels =: the effects, then the colours', async () => {
   const suggest = box().locator('.suggest-widget');
   await box().locator('.view-lines').click();
@@ -98,6 +122,35 @@ test('typeahead after pixels =: the effects, then the colours', async () => {
   await page.keyboard.press('Enter');
   await expect.poll(text).toContain('  pixels = sparkle cyan');
   await expect(page.getByTestId('check')).toContainText('Looks good', { timeout: 10_000 });
+});
+
+// a guard: the text typeahead already left the colours out here; the block's colour menu (above) did not
+test('typeahead offers no colours after an effect that has its own (rainbow, fire) or none (off)', async () => {
+  const suggest = box().locator('.suggest-widget');
+  for (const effect of ['fire', 'rainbow', 'off']) {
+    // typed by hand, then a space
+    await box().locator('.view-lines').click();
+    await page.keyboard.press('ControlOrMeta+End');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type(`pixels = ${effect} `, { delay: 20 });
+    await page.waitForTimeout(500);
+    await expect(suggest.filter({ visible: true }).filter({ hasText: /exact colour|cyan/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    // picked from the list, then a space
+    await page.keyboard.press('Enter');
+    await page.keyboard.type(`pixels = ${effect.slice(0, -1)}`, { delay: 20 });
+    await expect(suggest).toContainText(effect);
+    await page.keyboard.press('Enter');
+    await page.keyboard.type(' ', { delay: 20 });
+    await page.waitForTimeout(500);
+    await expect(suggest.filter({ visible: true }).filter({ hasText: /exact colour|cyan/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+  }
+  // an effect that takes a colour still offers them
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('pixels = chase ', { delay: 20 });
+  await expect(suggest).toContainText('exact colour');
+  await page.keyboard.press('Escape');
 });
 
 test('the pixels help links to LED patterns, and the pattern page says sending is coming', async () => {
