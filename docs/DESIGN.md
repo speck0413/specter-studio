@@ -184,7 +184,8 @@ Duplicate…, Delete…). Opening one shows its code (Monaco) beside a live prev
   `trigger<Name>()` (a button) and `inputNumber<Name>(v)`; labels from the name ("sliderFadeSpeed" -> "Fade speed").
   Every `export var` is shown with its value, live, and can be changed (a slider for 0 to 1, else a number field).
   Moved controls are remembered per pattern on this computer (`localStorage`) and given back when it loads; a
-  control never moved is not called (the pattern keeps its own starting values).
+  control never moved is not called (the pattern keeps its own starting values), so a colour control never moved
+  shows a striped grey swatch and "the pattern's own", never a made-up colour.
 - **The portable form.** `compilePattern(source)` returns a `PatternProgram`: plain numbers and names (the code as
   opcodes and 16.16 numbers, global names, function start addresses, entry points, controls, `export var`s, and
   source lines for messages). `programText()` drops the lines. Opcodes (`Op`) and built-in ids only ever grow. A

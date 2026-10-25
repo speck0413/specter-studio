@@ -1,6 +1,6 @@
 // LED patterns in Your library: make one, watch the preview strip animate, move a control, see a plain message for
-// a broken or endless pattern, save it, import a pattern file (.epe), see a word's help whole, and the preview under
-// the desktop window's Content Security Policy (the built app).
+// a broken or endless pattern, save it, import a pattern file (.epe), see a word's help whole, a colour control with
+// nothing chosen yet, and the preview under the desktop window's Content Security Policy (the built app).
 import { test, expect, Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -156,6 +156,27 @@ test('the help for a word is seen whole, even at the editor’s right edge', asy
   await expect(hover).toBeVisible({ timeout: 10_000 });
   await expectWhollyVisible(hover);
   await page.mouse.move(0, 0);
+});
+
+test('a colour control with nothing chosen yet shows no made-up colour', async () => {
+  await setCode(page, 'var hue = 0.08\nexport function hsvPickerColor(h, s, v) { hue = h }\nexport function rgbPickerTint(r, g, b) { }\nexport function render(index) { hsv(hue, 1, 1) }\n');
+  const picker = page.getByTestId('control-hsvPickerColor');
+  await expect(picker).toBeVisible({ timeout: 10_000 });
+  // the pattern starts orange: the swatch says the colour is the pattern's own, never red
+  for (const name of ['hsvPickerColor', 'rgbPickerTint']) {
+    await expect(page.getByTestId(`swatch-${name}`)).toHaveAttribute('data-unset', 'true');
+    await expect(page.getByTestId(`swatch-${name}`)).not.toHaveCSS('background-color', 'rgb(255, 0, 0)');
+  }
+  await expect(page.getByTestId('pattern-controls')).toContainText('the pattern’s own');
+  // the strip shows the pattern's own orange (red full, some green), not red
+  await expect.poll(async () => (await colours(page))[0], { timeout: 5_000 }).toMatch(/^#ff(?!00)[0-9a-f]{2}00$/);
+  // a colour picked is shown, and the pattern takes it
+  await picker.fill('#00ff00');
+  await expect(page.getByTestId('swatch-hsvPickerColor')).toHaveAttribute('data-unset', 'false');
+  await expect(page.getByTestId('swatch-hsvPickerColor')).toHaveCSS('background-color', 'rgb(0, 255, 0)');
+  await expect.poll(async () => (await colours(page))[0], { timeout: 5_000 }).toBe('#00ff00');
+  await expect(page.getByTestId('swatch-rgbPickerTint')).toHaveAttribute('data-unset', 'true');
+  expect(await page.locator('main').innerText()).not.toMatch(BEGINNER);
 });
 
 test('the preview runs under the desktop window’s Content Security Policy', async ({ browser }) => {

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, FormControlLabel, Slider, Stack, Switch, TextField, Typography } from '@mui/material';
 import PatternWorker from './worker?worker';
 import type { FromWorker, ToWorker } from './worker';
+import { hex, hexToRgb, pickerHex, rgbToHsv } from './swatch';
 
 /** How long the preview waits for a frame before it stops the pattern. */
 export const STALL_MS = 1500;
@@ -22,24 +23,6 @@ function loadSaved(id: string): { controls: Record<string, number[]>; vars: Reco
 }
 function keepSaved(id: string, s: { controls: Record<string, number[]>; vars: Record<string, number> }) {
   try { localStorage.setItem(storeKey(id), JSON.stringify(s)); } catch { /* not kept */ }
-}
-
-const hex = (r: number, g: number, b: number) => '#' + [r, g, b].map((x) => Math.round(x).toString(16).padStart(2, '0')).join('');
-function hexToRgb(h: string): [number, number, number] {
-  const n = parseInt(h.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((x) => x / 255) as [number, number, number];
-}
-function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-  let h = 0;
-  if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  h /= 6; if (h < 0) h += 1;
-  return [h, mx ? d / mx : 0, mx];
-}
-function hsvToHex(h: number, s: number, v: number) {
-  const i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
-  const [r, g, b] = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][((i % 6) + 6) % 6];
-  return hex(r * 255, g * 255, b * 255);
 }
 
 export default function PatternPreview({ source, id, pixels, onError }: {
@@ -172,13 +155,21 @@ export default function PatternPreview({ source, id, pixels, onError }: {
               </Stack>
             );
             if (c.kind === 'hsvPicker' || c.kind === 'rgbPicker') {
-              const val = v ? (c.kind === 'hsvPicker' ? hsvToHex(v[0], v[1], v[2]) : hex(v[0] * 255, v[1] * 255, v[2] * 255)) : '#ff0000';
+              // nothing set yet: no colour is made up; the pattern starts in its own (whatever its code sets)
+              const val = pickerHex(c.kind, v);
               return (
                 <Stack key={c.name} direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                   <Typography component="label" htmlFor={`ctl-${c.name}`} sx={{ width: 140 }} noWrap>{c.label}</Typography>
-                  <input id={`ctl-${c.name}`} type="color" value={val} data-testid={`control-${c.name}`}
-                    onChange={(e) => { const rgb = hexToRgb(e.target.value); setControl(c.name, c.kind === 'hsvPicker' ? rgbToHsv(...rgb) : rgb); }}
-                    style={{ width: 48, height: 26, padding: 0, border: 'none', background: 'none' }} />
+                  <Box sx={{ position: 'relative', width: 48, height: 26, flexShrink: 0 }}>
+                    <Box data-testid={`swatch-${c.name}`} data-unset={val ? 'false' : 'true'} aria-hidden
+                      sx={{ position: 'absolute', inset: 0, borderRadius: 1, border: 1, borderColor: 'divider', bgcolor: val ?? 'grey.400',
+                        backgroundImage: val ? 'none' : 'repeating-linear-gradient(45deg, rgba(255,255,255,0.6) 0 4px, transparent 4px 8px)' }} />
+                    <input id={`ctl-${c.name}`} type="color" value={val ?? '#808080'} data-testid={`control-${c.name}`}
+                      aria-describedby={val ? undefined : `ctl-${c.name}-own`}
+                      onChange={(e) => { const rgb = hexToRgb(e.target.value); setControl(c.name, c.kind === 'hsvPicker' ? rgbToHsv(...rgb) : rgb); }}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', padding: 0, border: 'none', opacity: 0, cursor: 'pointer' }} />
+                  </Box>
+                  {!val && <Typography id={`ctl-${c.name}-own`} variant="body2" color="text.secondary">the pattern’s own</Typography>}
                 </Stack>
               );
             }
