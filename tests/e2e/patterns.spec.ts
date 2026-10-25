@@ -1,11 +1,12 @@
 // LED patterns in Your library: make one, watch the preview strip animate, move a control, see a plain message for
-// a broken or endless pattern, save it, import a pattern file (.epe), and the preview under the desktop window's
-// Content Security Policy (the built app).
+// a broken or endless pattern, save it, import a pattern file (.epe), see a word's help whole, and the preview under
+// the desktop window's Content Security Policy (the built app).
 import { test, expect, Page } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { allowedPlugins } from './consent';
+import { expectWhollyVisible, hoverWord } from './hover';
 
 const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'specter-patterns-'));
 const EPE = path.resolve('tests/fixtures/patterns/blue-wave.epe');
@@ -146,6 +147,15 @@ test('a pattern file (.epe) is imported under its name', async () => {
   fs.writeFileSync(bad, 'hello');
   await page.getByTestId('pattern-import').setInputFiles(bad);
   await expect(page.getByRole('alert').filter({ hasText: 'This file is not a pattern file (.epe)' })).toBeVisible();
+});
+
+test('the help for a word is seen whole, even at the editor’s right edge', async () => {
+  await setCode(page, 'export function render(index) {\n  var level = index / pixelCount; hsv(level, 1, 1)\n}\n');
+  await hoverWord(page, page.getByTestId('pattern-code'), 'hsv');
+  const hover = page.locator('.monaco-hover').filter({ hasText: 'colours the light being drawn' });
+  await expect(hover).toBeVisible({ timeout: 10_000 });
+  await expectWhollyVisible(hover);
+  await page.mouse.move(0, 0);
 });
 
 test('the preview runs under the desktop window’s Content Security Policy', async ({ browser }) => {

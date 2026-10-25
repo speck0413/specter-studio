@@ -5,6 +5,7 @@ import Editor, { OnMount } from '@monaco-editor/react';
 import { useTheme } from '@mui/material';
 import { defineMonacoTheme, editorFontSize, monacoThemeName } from '../theme';
 import { runSave } from '../shell/save';
+import { editorOptions } from './editorOptions';
 
 export default function CodeEditor({ value, onChange, language, dark, options, onMount }: {
   value: string; onChange: (v: string) => void; language: string; dark: boolean; options?: Record<string, unknown>; onMount?: OnMount;
@@ -40,6 +41,6 @@ export default function CodeEditor({ value, onChange, language, dark, options, o
         e.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => { runSave(); });
         onMount?.(e, m);
       }}
-      options={{ ...options, fontSize }} />
+      options={editorOptions(options, fontSize)} />
   );
 }

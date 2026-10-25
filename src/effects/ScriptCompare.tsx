@@ -5,6 +5,7 @@ import { defineMonacoTheme, editorFontSize, monacoThemeName } from '../theme';
 import { DiffEditor } from '@monaco-editor/react';
 import { setupMonaco } from './monaco';
 import { LANG_ID } from './language';
+import { editorOptions } from '../components/editorOptions';
 
 setupMonaco();
 
@@ -33,7 +34,7 @@ export default function ScriptCompare({ name, boardName, boardText, libraryText,
         </Typography>
         <Box sx={{ height: '60vh', minHeight: 320, border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }} data-testid="script-diff">
           <DiffEditor language={LANG_ID} theme={monacoThemeName(theme)} beforeMount={(m) => defineMonacoTheme(m, theme)} original={libraryText} modified={boardText}
-            options={{ readOnly: true, originalEditable: false, renderSideBySide: wide, minimap: { enabled: false }, fontSize: editorFontSize(theme), wordWrap: 'on', scrollBeyondLastLine: false, automaticLayout: true }} />
+            options={editorOptions({ readOnly: true, originalEditable: false, renderSideBySide: wide, minimap: { enabled: false }, wordWrap: 'on', scrollBeyondLastLine: false, automaticLayout: true }, editorFontSize(theme))} />
         </Box>
       </DialogContent>
       <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>

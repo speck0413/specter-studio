@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { allowedPlugins } from './consent';
+import { expectWhollyVisible } from './hover';
 
 const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'specter-pixels-'));
 const SCRIPT = 'effect lights:\n  pixels = breathe purple\n  wait for trig1\n  pixels = chase red\n  wait 2\n';
@@ -104,6 +105,8 @@ test('the pixels help links to LED patterns, and the pattern page says sending i
   await word.hover();
   const hover = page.locator('.monaco-hover').filter({ hasText: 'Lights the LED strip' });
   await expect(hover).toBeVisible({ timeout: 10_000 });
+  // near the top of the editor: the help is not cut off at its first line
+  await expectWhollyVisible(hover);
   await hover.getByRole('link', { name: 'LED pattern' }).click();
   // unsaved edits: Studio asks or keeps them; either way Your library opens without the effect
   const keep = page.getByRole('dialog').getByRole('button', { name: /Keep|Leave|Discard|Don.t save/ });
