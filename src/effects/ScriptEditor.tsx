@@ -123,8 +123,21 @@ export default function ScriptEditor({ text, onChange, dark, gotoName, checkWith
     setTerms(termsFor(termsBoard?.info, profile, soundNames.length ? soundNames : boardSounds));
   }, [termsBoard?.info, profile, soundNames, termsBoard?.script]);
 
-  // the other boards a tell line can name, and their effects (fleet.ts): set only when that list changes
-  const fleetKey = JSON.stringify(fleetFrom(boards, self));
+  // the other boards a tell line can name, their effects and the settings they take (fleet.ts): set only when that
+  // list changes; each board's settings are read once, and again after they changed (paramsSeq)
+  const [tellParams, setTellParams] = useState<Record<string, { seq: number; params: any[] }>>({});
+  const askFor = Object.values(boards).filter((b) => b.online && !b.adapter && b.key !== self).map((b) => `${b.key}\n${b.paramsSeq || 0}`).join('\t');
+  useEffect(() => {
+    for (const item of askFor ? askFor.split('\t') : []) {
+      const [key, seq] = item.split('\n');
+      if (tellParams[key]?.seq === Number(seq)) continue;
+      rpc(key, { op: 'get_params' }).then((r: any) => {
+        if (r?.ok && Array.isArray(r.result?.params)) setTellParams((all) => ({ ...all, [key]: { seq: Number(seq), params: r.result.params } }));
+      }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askFor]);
+  const fleetKey = JSON.stringify(fleetFrom(boards, self, Object.fromEntries(Object.entries(tellParams).map(([k, v]) => [k, v.params]))));
   useEffect(() => setFleet(JSON.parse(fleetKey)), [fleetKey]);
 
   const errors = check?.errors || [];

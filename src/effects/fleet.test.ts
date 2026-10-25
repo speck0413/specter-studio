@@ -5,9 +5,10 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { completionsAt, lineStarts } from './completions';
-import { fleetFrom, hostLabel, scriptEffects, tellName } from './fleet';
+import { fleetFrom, hostLabel, NOT_FROM_ANOTHER_BOARD, scriptEffects, tellName, tellSettings } from './fleet';
 import { hoverFor } from './language';
 import { defaultTerms } from './terms';
+import { parse } from './blocks';
 import { checkHint } from '../words';
 
 const boards: Record<string, any> = {
@@ -16,7 +17,10 @@ const boards: Record<string, any> = {
   c: { key: 'c', info: { name: 'Crypt', id: 'ffff0001' } }, // its script is not known
   d: { key: 'adapter:x:1', adapter: 'x', info: { name: 'Smart plug' } }, // a device adapter's device: not a board
 };
-const fleet = fleetFrom(boards, 'a');
+// a board's settings as the firmware lists them (its golden get_params answer)
+const PARAMS = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../firmware/firmware/arduino/test/golden/02-params.json'), 'utf8'));
+const params: any[] = (PARAMS.result ?? PARAMS).params;
+const fleet = fleetFrom(boards, 'a', { b: params });
 const labels = (before: string) => completionsAt(before, defaultTerms(), fleet).map((c) => c.label);
 
 describe('the boards a tell line can name', () => {
@@ -35,9 +39,27 @@ describe('the boards a tell line can name', () => {
   });
   it('lists the other boards, never this one or a device adapter\'s device; effects only when the script is known', () => {
     expect(fleet).toEqual([
-      { label: 'crypt', name: 'Crypt', effects: null },
-      { label: 'porch', name: 'Porch', effects: ['blackout', 'porch_light'] },
+      { label: 'crypt', name: 'Crypt', effects: null, settings: null },
+      { label: 'porch', name: 'Porch', effects: ['blackout', 'porch_light'], settings: tellSettings(params) },
     ]);
+  });
+});
+
+describe('the settings a tell line can change', () => {
+  const keys = tellSettings(params)!.map((t) => t.key);
+  it('every setting the board lists, except secrets, those that need a restart and those it never takes from another board', () => {
+    expect(keys).toContain('pixel_speed');
+    expect(keys).toContain('cooldown_ms');
+    for (const k of [...NOT_FROM_ANOTHER_BOARD, 'link_key', 'pin', 'wifi_pass']) expect(keys).not.toContain(k);
+    for (const p of params) if (p.secret || p.reboot) expect(keys).not.toContain(p.key);
+    expect(tellSettings(undefined)).toBeNull();
+  });
+  it('the refused list is the checker\'s (b02-tell-errors refuses wifi_pass and remote_trigger_enable)', () => {
+    expect(NOT_FROM_ANOTHER_BOARD).toEqual(expect.arrayContaining(['wifi_pass', 'remote_trigger_enable']));
+    const readme = fs.readFileSync(path.resolve(__dirname, '../../firmware/firmware/show-script-golden/README.md'), 'utf8');
+    const row = readme.split('\n').find((l) => l.startsWith('| `tell <board> <effect>`'))!;
+    const listed = /never takes from another \(([^)]*)\)/.exec(row)![1].match(/`([a-z_]+)`/g)!.map((w) => w.slice(1, -1));
+    expect([...NOT_FROM_ANOTHER_BOARD].sort()).toEqual([...listed].sort());
   });
 });
 
@@ -57,13 +79,28 @@ describe('typeahead after tell', () => {
     expect(completionsAt('  tell ', defaultTerms(), []).map((c) => c.label)).toEqual(['all']);
   });
   it('after a board: its effects when Studio knows its script, else none', () => {
-    expect(labels('  tell porch ')).toEqual(['blackout', 'porch_light']);
-    expect(labels('  tell Porch bl')).toEqual(['blackout', 'porch_light']);
+    const effects = (before: string) => completionsAt(before, defaultTerms(), fleet).filter((c) => c.kind === 'word').map((c) => c.label);
+    expect(effects('  tell porch ')).toEqual(['blackout', 'porch_light']);
+    expect(effects('  tell Porch bl')).toEqual(['blackout', 'porch_light']);
     expect(labels('  tell crypt ')).toEqual([]);
     expect(labels('  tell nobody ')).toEqual([]);
-    expect(labels('  tell all ')).toEqual(['blackout', 'porch_light']);
-    // a setting is the person's to write
+    expect(effects('  tell all ')).toEqual(['blackout', 'porch_light']);
+    // the value is the person's to write
     expect(labels('  tell porch pixel_speed = ')).toEqual([]);
+  });
+  it('after a board: after its effects, the settings it takes from another board, each going on to " = "', () => {
+    const c = completionsAt('  tell porch ', defaultTerms(), fleet);
+    const settings = c.filter((x) => x.kind === 'setting');
+    expect(c.findIndex((x) => x.kind === 'setting')).toBe(2);
+    expect(settings.map((x) => x.insert)).toEqual(tellSettings(params)!.map((t) => `${t.key} = `));
+    const speed = settings.find((x) => x.filter === 'pixel_speed')!;
+    expect(speed.detail).toMatch(/not saved/);
+    expect(settings.some((x) => x.filter === 'wifi_pass' || x.filter === 'remote_trigger_enable')).toBe(false);
+    expect(completionsAt('  tell all ', defaultTerms(), fleet).filter((x) => x.kind === 'setting').length).toBe(settings.length);
+    expect(completionsAt('  tell crypt ', defaultTerms(), fleet)).toEqual([]);
+  });
+  it('a setting from the typeahead makes a line the tell block reads', () => {
+    expect(parse('  tell porch pixel_speed = 150').f).toEqual({ BOARD: 'porch', DO: 'pixel_speed = 150' });
   });
 });
 

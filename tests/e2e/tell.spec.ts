@@ -84,7 +84,7 @@ test.afterAll(async () => {
   fs.rmSync(ws, { recursive: true, force: true });
 });
 
-test('typeahead after tell: the other boards by network name and all, then the board\'s effects', async () => {
+test('typeahead after tell: the other boards by network name and all, then the board\'s effects and settings', async () => {
   const suggest = box().locator('.suggest-widget');
   await box().locator('.view-lines').click();
   await page.keyboard.press('ControlOrMeta+End');
@@ -102,6 +102,23 @@ test('typeahead after tell: the other boards by network name and all, then the b
   await expect(page.getByTestId('check')).toContainText('Looks good', { timeout: 10_000 });
   // the tell block
   await expect(page.getByTestId('blocks').locator('.blocklySvg .blocklyBlockCanvas').first()).toContainText(/tell\s*porch\s*blackout/);
+  // after the effects, the settings Porch takes from another board (read from Porch), each going on to " = "
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('tell porch ', { delay: 20 });
+  await expect(suggest.locator('.monaco-list-row').filter({ hasText: 'blackout' })).toBeVisible();
+  await page.keyboard.type('pixel_sp', { delay: 20 });
+  await expect(suggest.locator('.monaco-list-row').filter({ hasText: 'pixel_speed' })).toBeVisible();
+  await expect(suggest).not.toContainText('wifi_pass');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('150', { delay: 20 });
+  await expect(page.getByTestId('check')).toContainText('Looks good', { timeout: 10_000 });
+  // the script alone is wide enough to show the line on one row
+  const views = page.getByTestId('editor-view');
+  await views.getByRole('button', { name: 'Script only' }).click();
+  await expect.poll(text).toBe('effect doorbell:\n  wait for trig1\n  wait 1\n  tell porch blackout\n  tell porch pixel_speed = 150');
+  await views.getByRole('button', { name: 'Script and blocks' }).click();
+  await expect(page.getByTestId('blocks').locator('.blocklySvg .blocklyBlockCanvas').first()).toContainText(/tell\s*porch\s*pixel_speed\s*=\s*150/);
 });
 
 test('the help says how a tell line works', async () => {
