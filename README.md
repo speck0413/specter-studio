@@ -182,7 +182,7 @@ The web app answers with a redirect, which Studio follows; the row is added eith
 - The Sheet can do its own sums (for example `=AVERAGE` over a time column), but Studio already sends the time
   taken and the counts.
 
-A ready-to-copy rule for **Import rules** (Settings, Automation). It does the owner's example:
+A ready-to-copy rule for **Import rules** (Settings, Automation). It does this example:
 `checkin/*/{roomName}/complete` sends `{roomName},complete,{timestamp}`, after the event id. After importing,
 open the rule, paste your `/exec` address and set the key's value (secret values are never in an export).
 
@@ -226,26 +226,21 @@ come again on every reconnect, so they are not news.
 
 From a computer with nothing installed to Studio running and a blank ESP32 DevKit on the stock firmware. The
 same steps with more explanation, and the Windows and Linux notes, are in the firmware repository's
-[docs/DEV-SETUP.md](https://github.com/speck0413/specter-proptroller-dev/blob/rc2/docs/DEV-SETUP.md)
-(on the development repository's rc2 branch; it moves to the public repository when rc.2 is published).
+[docs/DEV-SETUP.md](https://github.com/speck0413/specter-proptroller/blob/main/docs/DEV-SETUP.md).
 
-**1. Tools (macOS, once).** Apple's Command Line Tools, Homebrew (it asks for your password; paste the two
-"Next steps" lines it prints), and the GitHub sign-in for the private repositories:
+**1. Tools (macOS, once).** Apple's Command Line Tools and Homebrew (it asks for your password; paste the two
+"Next steps" lines it prints):
 
 ```sh
 xcode-select --install
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install gh && gh auth login && gh auth setup-git
 ```
 
-**2. Clone.** The `git config` line is needed until firmware 0.1.0-rc.2 is published on the public repository
-(the pinned firmware commit is on the development repository until then):
+**2. Clone** (with the firmware submodule):
 
 ```sh
 mkdir -p ~/specter && cd ~/specter
-git clone -b rc2 https://github.com/speck0413/specter-studio.git && cd specter-studio
-git submodule init
-git config submodule.firmware.url https://github.com/speck0413/specter-proptroller-dev.git
+git clone --recurse-submodules https://github.com/speck0413/specter-studio.git && cd specter-studio
 ```
 
 **3. Set up and start:**
@@ -268,8 +263,10 @@ no practice board on Windows yet. Building Studio also needs libclang (docs/BUIL
 package image"; setup.sh / setup.ps1 check it): Linux `libclang-dev`, macOS the Command Line Tools (else
 `brew install llvm` and `LIBCLANG_PATH`), Windows `winget install LLVM.LLVM` and `LIBCLANG_PATH`. Homebrew's rustup is keg-only, hence the two macOS `PATH` lines (once).
 
-**4. A release folder (until rc.2 is published).** Studio reads the firmware from GitHub releases. Until rc.2 is
-there, build it in a second terminal and point Studio at it:
+**4. Your own firmware build (optional).** Studio comes with the stock ESP32 DevKit firmware (the first
+`npm run tauri dev` builds it from the firmware submodule) and also reads newer releases from GitHub. For the Pico W
+boards, or to install a firmware you built yourself, build a release folder in a second terminal and point Studio
+at it:
 
 ```sh
 cd ~/specter/specter-studio/firmware/firmware/arduino

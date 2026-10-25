@@ -21,7 +21,7 @@ fn source_names() {
     assert_eq!(github_repo("https://api.github.com/repos/speck0413/spectre-proptroller/releases"), want);
     // a direct manifest address or a folder is not a repository
     assert_eq!(github_repo("https://github.com/speck0413/spectre-proptroller/releases/latest/download/proptroller-firmware.json"), None);
-    assert_eq!(github_repo("/home/me/release"), None);
+    assert_eq!(github_repo("/srv/release"), None);
     assert_eq!(github_repo("https://example.com/speck0413/spectre-proptroller/releases"), None);
 }
 

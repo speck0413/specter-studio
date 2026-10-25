@@ -3,8 +3,7 @@
 # Unsigned by default; see docs/BUILDING.md for the signing secrets. The installers are workflow artifacts; a
 # pushed v* tag also puts them on that tag's GitHub release (a pre-release when the tag has a "-", e.g. -rc.2). The e2e job runs the
 # Playwright tests (tests/e2e) against the real bridge and simulated boards in Chrome. The firmware submodule comes
-# from the public firmware repository; a pin to an unpublished development commit needs FIRMWARE_REPO_TOKEN
-# (scripts/ci-firmware-submodule.sh, docs/BUILDING.md). Action versions are pinned by commit SHA (tag in the comment).
+# from the public firmware repository (scripts/ci-firmware-submodule.sh, docs/BUILDING.md). Action versions are pinned by commit SHA (tag in the comment).
 name: build
 
 on:
@@ -33,10 +32,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Firmware submodule (public repository; the development one only with FIRMWARE_REPO_TOKEN)
-        env:
-          FIRMWARE_REPO_TOKEN: ${{ secrets.FIRMWARE_REPO_TOKEN }}
-          FIRMWARE_DEV_REPO: ${{ vars.FIRMWARE_DEV_REPO }}
+      - name: Firmware submodule (public repository)
         run: ./scripts/ci-firmware-submodule.sh # not recursive: the firmware's own aieda submodule is not needed
       - name: Linux packages
         run: |
@@ -80,10 +76,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Firmware submodule (public repository; the development one only with FIRMWARE_REPO_TOKEN)
-        env:
-          FIRMWARE_REPO_TOKEN: ${{ secrets.FIRMWARE_REPO_TOKEN }}
-          FIRMWARE_DEV_REPO: ${{ vars.FIRMWARE_DEV_REPO }}
+      - name: Firmware submodule (public repository)
         run: ./scripts/ci-firmware-submodule.sh
       - name: Linux packages
         run: |
@@ -165,10 +158,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Firmware submodule (public repository; the development one only with FIRMWARE_REPO_TOKEN)
-        env:
-          FIRMWARE_REPO_TOKEN: ${{ secrets.FIRMWARE_REPO_TOKEN }}
-          FIRMWARE_DEV_REPO: ${{ vars.FIRMWARE_DEV_REPO }}
+      - name: Firmware submodule (public repository)
         run: ./scripts/ci-firmware-submodule.sh
       - name: Wiring guides from the firmware repository (when the GUIDES_REF variable names a branch)
         if: vars.GUIDES_REF != ''
@@ -178,7 +168,6 @@ jobs:
           ref: ${{ vars.GUIDES_REF }}
           path: firmware-guides
           sparse-checkout: docs/wiring-guides/html
-          token: ${{ secrets.FIRMWARE_REPO_TOKEN || github.token }}
           persist-credentials: false
       # libclang: core builds the C littlefs with bindgen (docs/BUILDING.md). Windows runners have LLVM installed,
       # macOS runners Xcode's libclang, Linux gets libclang-dev with the packages below
