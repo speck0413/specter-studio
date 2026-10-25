@@ -21,36 +21,50 @@
   const el = document.getElementById('boards');
   let boards = [];
   const answers = {};
+  const outsHtml = (b) => (b.state?.outputs || []).map((o) => `<span class="out">${o.channel}: ${o.level > 0 ? 'on' : 'off'}</span>`).join('');
+  // Draws the list in place: a board's card and buttons stay the same elements when the list is drawn again (Studio
+  // tells the plugin each time a board comes or goes, often right after the page opens), so a press is never lost on
+  // a button replaced under the pointer.
   function draw() {
-    el.innerHTML = '';
-    if (!boards.length) el.textContent = 'No boards connected.';
+    if (!boards.length) { el.textContent = 'No boards connected.'; return; }
+    if (!el.querySelector('.board')) el.textContent = '';
+    for (const d of [...el.querySelectorAll('.board')]) if (!boards.some((b) => b.key === d.dataset.key)) d.remove();
     for (const b of boards) {
-      const d = document.createElement('div');
-      d.className = 'board';
-      d.dataset.key = b.key;
-      const outs = (b.state?.outputs || []).map((o) => `<span class="out">${o.channel}: ${o.level > 0 ? 'on' : 'off'}</span>`).join('');
+      let d = el.querySelector(`.board[data-key="${CSS.escape(b.key)}"]`);
+      if (!d) {
+        d = document.createElement('div');
+        d.className = 'board';
+        d.dataset.key = b.key;
+        d.innerHTML = '<h2></h2><div class="online"></div><div class="outs"></div>';
+        const ask = document.createElement('button');
+        ask.className = 'ask';
+        ask.onclick = async () => {
+          // Studio refuses or the board does not answer: say so on the button (a plugin never fails silently)
+          try {
+            const r = await studio.rpc(b.key, { op: 'state' });
+            answers[b.key] = r.ok ? `Up ${Math.round(r.result.uptime_ms / 1000)} s` : 'No answer: ' + r.error.message;
+          } catch (e) { answers[b.key] = 'No answer: ' + e.message; }
+          draw();
+        };
+        const send = document.createElement('button');
+        send.className = 'send';
+        send.onclick = async () => {
+          try {
+            const r = await studio.sendScript(b.key, 'effect plugin test:\n  wait for trig2\n  out2 = on\n  sleep 1\n  out2 = off\n');
+            answers['send:' + b.key] = r.ok && r.result.ok ? 'Test effect sent' : 'Not sent: ' + (r.error?.message || r.result?.errors?.[0]?.message);
+          } catch (e) { answers['send:' + b.key] = 'Not sent: ' + e.message; }
+          draw();
+        };
+        d.append(ask, send);
+        el.appendChild(d);
+      }
       // the board's name is text, never markup (a name is whatever someone typed)
-      d.innerHTML = `<h2></h2><div>${b.online ? 'online' : 'offline'}</div><div class="outs">${outs}</div>`;
-      d.querySelector('h2').textContent = b.name;
-      const btn = document.createElement('button');
-      btn.textContent = answers[b.key] || 'Ask for its state';
-      btn.onclick = async () => {
-        const r = await studio.rpc(b.key, { op: 'state' });
-        answers[b.key] = r.ok ? `Up ${Math.round(r.result.uptime_ms / 1000)} s` : r.error.message;
-        draw(); // the list may have been drawn again meanwhile (a board came or went): show the answer on the current one
-      };
-      d.appendChild(btn);
-      const send = document.createElement('button');
-      send.textContent = answers['send:' + b.key] || 'Send a tiny test effect';
-      send.onclick = async () => {
-        try {
-          const r = await studio.sendScript(b.key, 'effect plugin test:\n  wait for trig2\n  out2 = on\n  sleep 1\n  out2 = off\n');
-          answers['send:' + b.key] = r.ok && r.result.ok ? 'Test effect sent' : 'Not sent: ' + (r.error?.message || r.result?.errors?.[0]?.message);
-        } catch (e) { answers['send:' + b.key] = 'Not sent: ' + e.message; }
-        draw();
-      };
-      d.appendChild(send);
-      el.appendChild(d);
+      const set = (sel, text) => { const x = d.querySelector(sel); if (x.textContent !== text) x.textContent = text; };
+      set('h2', b.name || b.key);
+      set('.online', b.online ? 'online' : 'offline');
+      d.querySelector('.outs').innerHTML = outsHtml(b);
+      set('.ask', answers[b.key] || 'Ask for its state');
+      set('.send', answers['send:' + b.key] || 'Send a tiny test effect');
     }
   }
   studio.boards().then((b) => { boards = b; draw(); });
@@ -62,7 +76,7 @@
       if (b) {
         b.state = e.msg.data;
         const el = document.querySelector(`.board[data-key="${CSS.escape(b.key)}"] .outs`);
-        if (el) el.innerHTML = (b.state.outputs || []).map((o) => `<span class="out">${o.channel}: ${o.level > 0 ? 'on' : 'off'}</span>`).join('');
+        if (el) el.innerHTML = outsHtml(b);
       }
     }
   });

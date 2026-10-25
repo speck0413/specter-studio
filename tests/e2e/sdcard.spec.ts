@@ -25,7 +25,13 @@ test.beforeAll(async ({ browser }) => {
   await page.goto('/');
 });
 
-test.afterAll(() => { fs.rmSync(sounds, { recursive: true, force: true }); fs.rmSync(ws, { recursive: true, force: true }); });
+test.afterAll(async () => {
+  // this file's Studio page goes too: a page left open keeps talking to the shared device layer (and loading the
+  // browser) through every later file
+  await page?.context().close();
+  fs.rmSync(sounds, { recursive: true, force: true });
+  fs.rmSync(ws, { recursive: true, force: true });
+});
 
 test('each sound goes in its own numbered folder, in the order of the list, and Check finds nothing wrong', async () => {
   // reachable from the library's side bar

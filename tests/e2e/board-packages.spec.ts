@@ -45,6 +45,9 @@ test.beforeAll(async ({ browser }) => {
 });
 
 test.afterAll(async () => {
+  // this file's Studio page goes too: a page left open keeps talking to the shared device layer (and loading the
+  // browser) through every later file
+  await page?.context().close();
   for (let i = 0; i < 20; i++) {
     await dl('disconnect', { key }).catch(() => {});
     const left = await dl('connections').catch(() => []);
