@@ -134,7 +134,7 @@ fn check_signed(manifest: &[u8], sig: Option<String>) -> Result<(), String> {
 
 /// The release to use from GitHub's list (newest first), among those that carry a manifest (drafts never).
 /// `betas` off (Settings "Allow betas", the default): the newest full release, or, while there is none, the newest
-/// pre-release (release candidates stay pre-releases, and a new user never meets "nothing to
+/// pre-release (owner 2026-10-24: release candidates stay pre-releases; a new user never meets "nothing to
 /// install"). `betas` on: the highest version of all, a pre-release or a full release, whichever is newer.
 pub fn pick_release(list: &Value, betas: bool) -> Option<&Value> {
     let with_manifest = |r: &&Value| r["draft"] != true && r["assets"].as_array().is_some_and(|a| a.iter().any(|x| x["name"] == MANIFEST));

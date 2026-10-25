@@ -40,7 +40,7 @@ describe('the sound list', () => {
     expect(cardName(3, 'scream: loud?', 'WAV')).toBe('0003-scream loud.wav');
     expect(cardName(4, '...', 'mp3')).toBe('0004.mp3');
     expect(cardName(5, 'x'.repeat(400), 'mp3').length).toBe(255);
-    expect(descriptionOf('/media/sd/sounds/door creak.mp3')).toBe('door creak');
+    expect(descriptionOf('/home/me/sounds/door creak.mp3')).toBe('door creak');
     expect(descriptionOf('C:\\Sounds\\rain.wav')).toBe('rain');
   });
   it('moves an item up or down', () => {

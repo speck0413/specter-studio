@@ -73,6 +73,10 @@ if ($llvm) {
 Write-Host ''
 Write-Host 'Tools'
 if (Have 'git') { Ok "git ($((git --version) -replace 'git version ',''))" } else { WingetInstall 'Git.Git' 'Git (with Git Bash)' }
+if (Have 'gh') {
+  gh auth status *> $null
+  if ($LASTEXITCODE -eq 0) { Ok 'GitHub CLI, signed in' } else { Todo 'gh auth login; gh auth setup-git   (for the private repositories)' }
+} else { WingetInstall 'GitHub.cli' 'GitHub CLI (signs in for the private repositories)' }
 $nodeOk = $false
 if (Have 'node') {
   $major = [int](((node -v) -replace '^v', '') -split '\.')[0]
@@ -133,7 +137,9 @@ rustup toolchain install
 git submodule update --init
 if ($LASTEXITCODE -ne 0) {
   Write-Host 'The firmware submodule did not check out.'
-  Write-Host 'Check the internet connection and run this again.'
+  Write-Host '- Private repository: gh auth login, then gh auth setup-git, then run this again.'
+  Write-Host '- The pinned commit is on the development repository until it is published:'
+  Write-Host '    git config submodule.firmware.url https://github.com/speck0413/specter-proptroller-dev.git'
   exit 1
 }
 Did 'npm packages (npm ci)'

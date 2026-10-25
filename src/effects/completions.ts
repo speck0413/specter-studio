@@ -92,9 +92,9 @@ export function completionsAt(before: string, terms: Terms = getTerms()): Comple
   // sounds
   if ((m = /^\s*audio_(single|loop)\s*[=:]\s*(\S*)$/i.exec(b))) {
     const loop = m[1].toLowerCase() === 'loop';
-    // a sound is its number (`audio_single = 2` plays 0002-….mp3); the description is the hint
+    // a sound is its number (`audio_single = 2` plays 02/001-….mp3); the description is the hint
     const list: Completion[] = terms.sounds.map((s) => ({ label: String(s.n), insert: String(s.n), snippet: false, detail: s.description || `sound ${s.n}`, filter: `${s.n} ${s.description}`, kind: 'sound' }));
-    if (!list.length) list.push({ label: 'sound number', insert: '${1:1}', snippet: true, detail: 'the sound\'s number (0002-….mp3 is 2): type it', kind: 'sound' });
+    if (!list.length) list.push({ label: 'sound number', insert: '${1:1}', snippet: true, detail: 'the sound\'s number, 1 to 99 (folder 02 is 2): type it', kind: 'sound' });
     if (loop) list.push(word('off', 'end the background sound'));
     return list;
   }

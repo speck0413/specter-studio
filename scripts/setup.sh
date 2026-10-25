@@ -60,10 +60,10 @@ if [ "$OS" = Darwin ]; then
   if have brew; then
     ok "Homebrew ($(brew --prefix))"
     if installing; then
-      did "Homebrew packages from the Brewfile (node, rustup, esptool)"
+      did "Homebrew packages from the Brewfile (gh, node, rustup, esptool)"
       brew bundle --file=Brewfile
     elif brew bundle check --file=Brewfile >/dev/null 2>&1; then
-      ok "Brewfile packages (node, rustup, esptool)"
+      ok "Brewfile packages (gh, node, rustup, esptool)"
     else
       miss "Brewfile packages: brew bundle --file=Brewfile"
     fi
@@ -124,11 +124,17 @@ else
   else miss "libclang (your distribution's clang or libclang package)"; fi
 fi
 
-# --- git, Node, Rust ------------------------------------------------------------------------
+# --- git, GitHub sign-in, Node, Rust ------------------------------------------------------------------------
 echo
 echo "Tools"
 if have git; then ok "git ($(git --version | sed 's/git version //'))"
 else miss "git (macOS: the Command Line Tools; Linux: your package manager, for example sudo apt install git)"; fi
+if have gh; then
+  if gh auth status >/dev/null 2>&1; then ok "GitHub CLI, signed in"
+  else todo "gh auth login && gh auth setup-git   (for the private repositories)"; fi
+else
+  note "GitHub CLI (gh): not found. Optional; it is the easy way to sign in for the private repositories."
+fi
 if have node; then
   NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)
   if [ "$NODE_MAJOR" -ge 20 ] 2>/dev/null; then ok "Node.js $(node -v), npm $(npm -v 2>/dev/null)"
@@ -219,7 +225,10 @@ if git -c protocol.file.allow=always submodule update --init; then
   ok "firmware submodule at $(git -C firmware rev-parse --short HEAD)"
 else
   echo "The firmware submodule did not check out." >&2
-  echo "Check the internet connection and run scripts/setup.sh again." >&2
+  echo "- Private repository: gh auth login, then gh auth setup-git, then run scripts/setup.sh again." >&2
+  echo "- The pinned commit is on the development repository until it is published:" >&2
+  echo "    git config submodule.firmware.url https://github.com/speck0413/specter-proptroller-dev.git" >&2
+  echo "    scripts/setup.sh" >&2
   exit 1
 fi
 did "npm packages (npm ci)"

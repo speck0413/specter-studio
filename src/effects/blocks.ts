@@ -30,7 +30,7 @@ const defs = [
   { type: 'ps_limit', message0: 'limit %1 runs per %2', args0: [{ type: 'field_ps_popup', name: 'RUNS', kind: 'runs', text: '3' }, { type: 'field_ps_popup', name: 'TIME', kind: 'time', text: '3 min' }], previousStatement: null, nextStatement: null, colour: COLOURS.wait,
     tooltip: 'At most this many runs in a window that starts at the first run.' },
   { type: 'ps_audio_single', message0: 'play sound %1 once', args0: [{ type: 'field_ps_choice', name: 'SOUND', kind: 'sound', text: '1' }], previousStatement: null, nextStatement: null, colour: COLOURS.sound,
-    tooltip: 'Plays sound N once: the file 000N-….mp3 in the card\'s mp3 folder.' },
+    tooltip: 'Plays sound N once: the one file in the card\'s folder NN (NN/001-….mp3).' },
   { type: 'ps_audio_loop', message0: 'play sound %1 over and over', args0: [{ type: 'field_ps_choice', name: 'SOUND', kind: 'loop', text: '1' }], previousStatement: null, nextStatement: null, colour: COLOURS.sound,
     tooltip: 'Plays a sound over and over, until another sound line.' },
   { type: 'ps_audio_stop', message0: 'stop the sound', previousStatement: null, nextStatement: null, colour: COLOURS.sound, tooltip: 'Stops the sound.' },

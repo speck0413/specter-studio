@@ -167,7 +167,7 @@ export default function RecordEffect({ b, onSave, onClose }: { b: Board; onSave:
   const tapSound = (n: number) => {
     if (phaseRef.current !== 'rec' || pausedRef.current) return;
     setPass({ ...passRef.current, sounds: [...passRef.current.sounds, { sound: n, at: elapsed() }] });
-    void change(b.key, { op: 'sound', cmd: 'play_mp3', track: n });
+    void change(b.key, { op: 'sound', cmd: 'play_folder', folder: n, track: 1 });
   };
 
   // ---- playing a take on the board: Studio drives the outputs along the timeline the script itself runs (its
@@ -188,7 +188,7 @@ export default function RecordEffect({ b, onSave, onClose }: { b: Board; onSave:
     setPlaying(what);
     const at = (ms: number, f: () => void) => timers.current.push(window.setTimeout(f, Math.max(0, ms - offset)));
     for (const e of what.timeline) {
-      if (e.sound !== undefined) { const n = e.sound; at(e.at, () => void change(b.key, { op: 'sound', cmd: 'play_mp3', track: n })); }
+      if (e.sound !== undefined) { const n = e.sound; at(e.at, () => void change(b.key, { op: 'sound', cmd: 'play_folder', folder: n, track: 1 })); }
       else { const { target, level } = e; at(e.at, () => { if (!heldRef.current[target]) void send(target, level); }); }
     }
     at(what.plan.lengthMs + 400, () => { setPlaying(null); then(); });

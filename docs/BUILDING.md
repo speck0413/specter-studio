@@ -135,13 +135,18 @@ same `.deb` without it (resources kept), which is how the Windows job works.
 ### The firmware submodule in CI
 
 The submodule URL is the public firmware repository (`https://github.com/speck0413/specter-proptroller.git`).
-`scripts/ci-firmware-submodule.sh` checks out the pinned commit from there, with no token; a pin that is not
-published there stops every job at that step with an error naming the pin.
+`scripts/ci-firmware-submodule.sh` checks out the pinned commit from there, with no token. When the pin is a
+development commit that is only on the private `specter-proptroller-dev` (not published yet), that fails, and the
+script tries the development repository with the `FIRMWARE_REPO_TOKEN` secret, sent as an HTTP header for that
+one command and never stored in `.git/config`. Without the secret every job stops at that step with an error
+naming the pin. Pinning a published commit needs no secret.
 
 ### Repository settings it needs
 
 | Name | Kind | Needed | What |
 |---|---|---|---|
+| `FIRMWARE_REPO_TOKEN` | secret | only while the submodule pins an unpublished development commit | fine-grained token, repository access `speck0413/specter-proptroller-dev`, permission Contents: read-only. Also used for the `GUIDES_REF` checkout when set |
+| `FIRMWARE_DEV_REPO` | variable | no | `owner/name` of the development repository, when it is not `speck0413/specter-proptroller-dev` |
 | `GUIDES_REF` | variable | for installers with the wiring guides | ref of `specter-proptroller` with `docs/wiring-guides/html` when the pinned submodule commit has none. Without guides the installers say they are not installed |
 
 ### Signing (later; installers are unsigned until these are set)
