@@ -273,10 +273,11 @@ export default function App() {
               onChange={(_, v) => go({ view: v })}>
               {[...top, ...bottom].map((v, i) => (
                 <Tab key={v.id} value={v.id} aria-label={v.label} data-testid={`activity-${v.id}`} sx={i === top.length ? { mt: 'auto' } : undefined}
-                  // the place you are in, clicked again: its start (all boards, the library's list)
+                  // the place you are in, clicked again: its start (all boards, the library's list). Its tooltip
+                  // (disableInteractive) lets clicks through to the side bar it covers and closes when the pointer leaves.
                   onClick={() => { if (v.id === loc.view && (loc.board || loc.item)) go({ view: v.id }); }}
                   label={
-                    <Tooltip placement="right" describeChild title={<><b>{v.label}</b>{v.keys ? ` (${keyLabel(v.keys)})` : ''}<br />{v.hint}</>}>
+                    <Tooltip placement="right" describeChild disableInteractive title={<><b>{v.label}</b>{v.keys ? ` (${keyLabel(v.keys)})` : ''}<br />{v.hint}</>}>
                       <Box component="span" className="act">{v.icon}<Box component="span" className="act-label">{v.short}</Box>{' '}</Box>
                     </Tooltip>
                   } />

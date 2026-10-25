@@ -21,6 +21,13 @@ fn free_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
 }
 
+/// Two different free ports: both listeners are held at once, so the system cannot hand out the same port twice.
+fn two_free_ports() -> (u16, u16) {
+    let a = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let b = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    (a.local_addr().unwrap().port(), b.local_addr().unwrap().port())
+}
+
 /// A client on `port`; its event loop runs in a task (abort it to "pull the plug": no disconnect, so the
 /// broker publishes the last will).
 fn client(id: &str, port: u16, will: Option<LastWill>) -> (AsyncClient, tokio::sync::mpsc::UnboundedReceiver<(String, Vec<u8>)>, tokio::task::JoinHandle<()>) {
@@ -41,6 +48,35 @@ fn client(id: &str, port: u16, will: Option<LastWill>) -> (AsyncClient, tokio::s
         }
     });
     (c, rx, h)
+}
+
+/// Polls `check` every 100 ms until it gives a value or 15 s pass (a deadline, never a fixed sleep).
+async fn until<T, F, Fut>(what: &str, mut check: F) -> T
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Option<T>>,
+{
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        if let Some(v) = check().await {
+            return v;
+        }
+        assert!(tokio::time::Instant::now() < deadline, "timed out waiting for {what}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+/// Waits for a Fleet event for which `want` holds, within 20 s (a last will needs keep-alive 5 s x 1.5).
+async fn fleet_event(ev: &mut tokio::sync::broadcast::Receiver<Event>, want: impl Fn(&Value) -> bool) -> bool {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+    loop {
+        let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+        match tokio::time::timeout(left, ev.recv()).await {
+            Ok(Ok(Event::Fleet { board })) if want(&board) => return true,
+            Ok(Ok(_)) | Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => continue,
+            _ => return false,
+        }
+    }
 }
 
 /// Waits for a message on `topic` with `payload` (or any payload when None).
@@ -77,7 +113,7 @@ fn retained_topics_follow_the_protocol() {
 #[tokio::test(flavor = "multi_thread")]
 async fn fleet_server_bridge_and_commands() {
     let s = Studio::new();
-    let (a_port, b_port) = (free_port(), free_port());
+    let (a_port, b_port) = two_free_ports();
     let mut ev = s.events();
     s.dispatch("mqtt_start", json!({ "port": a_port })).await.unwrap();
     // "another server": a second broker
@@ -88,35 +124,36 @@ async fn fleet_server_bridge_and_commands() {
     let will = LastWill::new("proptroller/front-door/online", "false", QoS::AtLeastOnce, true);
     let (board, mut board_rx, plug) = client("front-door", a_port, Some(will));
     board.subscribe("proptroller/front-door/rpc", QoS::AtLeastOnce).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(500)).await;
     board.publish("proptroller/front-door/online", QoS::AtLeastOnce, true, "true").await.unwrap();
     board.publish("proptroller/front-door/state", QoS::AtLeastOnce, true, r#"{"v":1,"boot_id":"1a2b","mqtt_seq":3,"uptime_ms":1200,"outputs":[{"channel":"OUT1","level":1000}]}"#).await.unwrap();
     board.publish("proptroller/front-door/status/run_count", QoS::AtLeastOnce, true, "3").await.unwrap();
 
-    // Studio sees it
-    let mut seen = false;
-    for _ in 0..50 {
-        if let Ok(Ok(Event::Fleet { board })) = tokio::time::timeout(Duration::from_millis(200), ev.recv()).await {
-            if board["name"] == "front-door" && board["online"] == true && board["state"]["outputs"][0]["level"] == 1000 { seen = true; break; }
-        }
-    }
+    // Studio sees it (the messages arrive one by one: the run count can come after the state)
+    let seen = fleet_event(&mut ev, |b| b["name"] == "front-door" && b["online"] == true && b["state"]["outputs"][0]["level"] == 1000).await;
     assert!(seen, "the fleet shows the board online with its state");
-    let list = s.dispatch("mqtt_boards", json!({})).await.unwrap();
-    assert_eq!(list[0]["status"]["run_count"], 3);
+    until("the run count in mqtt_boards", || async {
+        let list = s.dispatch("mqtt_boards", json!({})).await.unwrap();
+        (list[0]["status"]["run_count"] == 3).then_some(())
+    }).await;
 
-    // the far side: a client connecting later gets the retained state and online
-    tokio::time::sleep(Duration::from_millis(800)).await;
+    // the far side: a client connecting later gets the retained state and online (or the live copies, when the
+    // bridge passes them on after it subscribed)
     let (far, mut far_rx, _h) = client("watcher", b_port, None);
     far.subscribe("haunt/#", QoS::AtLeastOnce).await.unwrap();
+    let want = ["haunt/proptroller/front-door/online", "haunt/proptroller/front-door/state", "haunt/proptroller/front-door/status/run_count", "haunt/specter-studio/online"];
     let mut got = std::collections::HashMap::new();
-    while let Ok(Some((t, p))) = tokio::time::timeout(Duration::from_secs(2), far_rx.recv()).await {
-        got.insert(t, p);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    while !want.iter().all(|w| got.contains_key(*w)) {
+        match tokio::time::timeout(deadline.saturating_duration_since(tokio::time::Instant::now()), far_rx.recv()).await {
+            Ok(Some((t, p))) => { got.insert(t, p); }
+            _ => break,
+        }
     }
     assert_eq!(got.get("haunt/proptroller/front-door/online").map(|v| v.as_slice()), Some(&b"true"[..]));
     assert_eq!(serde_json::from_slice::<Value>(&got["haunt/proptroller/front-door/state"]).unwrap()["uptime_ms"], 1200);
     assert_eq!(got.get("haunt/proptroller/front-door/status/run_count").map(|v| v.as_slice()), Some(&b"3"[..]));
     assert_eq!(got.get("haunt/specter-studio/online").map(|v| v.as_slice()), Some(&b"true"[..]));
-    assert_eq!(s.dispatch("mqtt_status", json!({})).await.unwrap()["bridge"]["connected"], true);
+    until("the bridge connected", || async { (s.dispatch("mqtt_status", json!({})).await.unwrap()["bridge"]["connected"] == true).then_some(()) }).await;
 
     // a request from Studio through the broker; the fake board answers
     let b2 = board.clone();
@@ -141,19 +178,27 @@ async fn fleet_server_bridge_and_commands() {
     }).await.is_err(), "a request from upstream reached the board");
     // allowed: it reaches the board, and the answer goes back up
     s.dispatch("bridge_start", json!({ "host": "127.0.0.1", "port": b_port, "prefix": "haunt/", "accept_commands": true })).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(800)).await;
-    up.publish("haunt/proptroller/front-door/rpc", QoS::AtLeastOnce, false, r#"{"v":1,"id":78,"op":"state"}"#).await.unwrap();
-    let reply = expect(&mut up_rx, "haunt/proptroller/front-door/rpc/reply", None).await;
-    assert_eq!(serde_json::from_slice::<Value>(&reply).unwrap()["id"], 78);
+    // the bridge connects again with the new setting: a request sent before its subscription is in place is lost
+    // (as on a real network), so ask every half second until a reply comes back up
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    let mut reply_id = None;
+    for id in 78.. {
+        assert!(tokio::time::Instant::now() < deadline, "no reply to an allowed upstream request");
+        up.publish("haunt/proptroller/front-door/rpc", QoS::AtLeastOnce, false, json!({ "v": 1, "id": id, "op": "state" }).to_string()).await.unwrap();
+        let wait = tokio::time::Instant::now() + Duration::from_millis(500);
+        while let Ok(Some((t, p))) = tokio::time::timeout(wait.saturating_duration_since(tokio::time::Instant::now()), up_rx.recv()).await {
+            if t == "haunt/proptroller/front-door/rpc/reply" {
+                reply_id = serde_json::from_slice::<Value>(&p).unwrap()["id"].as_i64();
+                break;
+            }
+        }
+        if reply_id.is_some() { break; }
+    }
+    assert!(reply_id >= Some(78), "the reply answers an allowed request (77 was refused): {reply_id:?}");
 
     // the board loses power: its last will says offline, here and on the far side
     plug.abort();
-    let mut offline = false;
-    for _ in 0..100 {
-        if let Ok(Ok(Event::Fleet { board })) = tokio::time::timeout(Duration::from_millis(200), ev.recv()).await {
-            if board["name"] == "front-door" && board["online"] == false { offline = true; break; }
-        }
-    }
+    let offline = fleet_event(&mut ev, |b| b["name"] == "front-door" && b["online"] == false).await;
     assert!(offline, "the last will arrived (keep-alive 5 s)");
     let (late, mut late_rx, _h3) = client("late-watcher", b_port, None);
     late.subscribe("haunt/proptroller/front-door/online", QoS::AtLeastOnce).await.unwrap();
@@ -323,7 +368,7 @@ async fn bridge_state(s: &Studio, want: &str) -> Value {
 #[tokio::test(flavor = "multi_thread")]
 async fn bridge_both_ways_never_loops() {
     let s = Studio::new();
-    let (a_port, b_port) = (free_port(), free_port());
+    let (a_port, b_port) = two_free_ports();
     s.dispatch("mqtt_start", json!({ "port": a_port, "bind": "127.0.0.1" })).await.unwrap();
     let (_b_tx, _b_rx) = mqtt::start_broker_with(b_port, "far", &mqtt::BrokerOptions { bind: Some("127.0.0.1".into()), login: None }).unwrap();
     let cfg = json!({ "host": "127.0.0.1", "port": b_port, "direction": "both", "filters": ["site/#"] });
@@ -360,7 +405,7 @@ async fn bridge_both_ways_never_loops() {
 #[tokio::test(flavor = "multi_thread")]
 async fn bridge_in_refuses_board_requests_unless_allowed() {
     let s = Studio::new();
-    let (a_port, b_port) = (free_port(), free_port());
+    let (a_port, b_port) = two_free_ports();
     s.dispatch("mqtt_start", json!({ "port": a_port, "bind": "127.0.0.1" })).await.unwrap();
     let (_b_tx, _b_rx) = mqtt::start_broker_with(b_port, "far", &mqtt::BrokerOptions { bind: Some("127.0.0.1".into()), login: None }).unwrap();
     s.dispatch("bridge_start", json!({ "host": "127.0.0.1", "port": b_port, "direction": "in", "prefix": "hq/" })).await.unwrap();
@@ -389,7 +434,7 @@ async fn bridge_in_refuses_board_requests_unless_allowed() {
 #[tokio::test(flavor = "multi_thread")]
 async fn bridge_retries_with_a_plain_reason_then_connects() {
     let s = Studio::new();
-    let (a_port, b_port) = (free_port(), free_port());
+    let (a_port, b_port) = two_free_ports();
     s.dispatch("mqtt_start", json!({ "port": a_port, "bind": "127.0.0.1" })).await.unwrap();
     // nothing is listening on b_port yet
     s.dispatch("bridge_start", json!({ "host": "127.0.0.1", "port": b_port })).await.unwrap();
@@ -434,7 +479,7 @@ fn echo_guard_recognises_both_directions() {
 #[tokio::test(flavor = "multi_thread")]
 async fn retained_copies_from_the_far_side_do_not_fire_rules_again_on_reconnect() {
     let s = Studio::new();
-    let (a_port, b_port) = (free_port(), free_port());
+    let (a_port, b_port) = two_free_ports();
     s.dispatch("mqtt_start", json!({ "port": a_port, "bind": "127.0.0.1" })).await.unwrap();
     // a counting rule (its web address goes nowhere: only the count matters here)
     let rule = json!({ "id": "enter", "pattern": "checkin/*/{roomName}/start", "url": "http://127.0.0.1:9/log", "body": "{roomName}", "count": { "direction": "up", "name": "inside", "per": "roomName" } });

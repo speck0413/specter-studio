@@ -51,6 +51,9 @@ test.beforeAll(async ({ browser }) => {
 });
 
 test.afterAll(async () => {
+  // this file's Studio page goes too: a page left open keeps talking to the shared device layer (and loading the
+  // browser) through every later file
+  await page?.context().close();
   await keyOf().then((key) => deviceLayer('disconnect', { key })).catch(() => {});
   sim?.kill();
   fs.rmSync(ws, { recursive: true, force: true });

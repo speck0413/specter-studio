@@ -41,8 +41,8 @@ export default function Plugins({ plugin }: { plugin: any }) {
   const subscribed = useRef(false);
   const [consented, setConsented] = useConsent(plugin || {});
   const [ask, setAsk] = useState<Ask | null>(null);
-  const askRef = useRef<(a: Omit<Ask, 'resolve'>) => Promise<boolean>>(async () => false);
-  askRef.current = (a) => new Promise((resolve) => setAsk({ ...a, resolve: (v) => { setAsk(null); resolve(v); } }));
+  // asks the person in Studio's own dialog (setAsk never changes, so this one function serves every render)
+  const askRef = useRef((a: Omit<Ask, 'resolve'>) => new Promise<boolean>((resolve) => setAsk({ ...a, resolve: (v) => { setAsk(null); resolve(v); } })));
 
   useEffect(() => {
     if (!consented) return;
@@ -51,6 +51,12 @@ export default function Plugins({ plugin }: { plugin: any }) {
     const mqttSubs = new Set<string>();
     const lit = new Map<string, Set<string>>(); // outputs this plugin turned on: let go when its page closes
     let asking = false;
+    // this run of the effect is current: once cleaned up (the page closed, or the effect ran again, as React's
+    // development mode does right after mounting) its message handler asks nobody. The cleanup used to replace the
+    // shared ask function with "no", which stayed so until the next render, so a plugin's first request after the
+    // page opened could be refused without a dialog.
+    let active = true;
+    const askPerson = (a: Omit<Ask, 'resolve'>) => (active ? askRef.current(a) : Promise.resolve(false));
     let refusedUntil = 0;
     const who = `${plugin?.name || plugin?.id} (${plugin?.id})`;
     const post = (m: any) => frame.current?.contentWindow?.postMessage(m, '*');
@@ -81,7 +87,7 @@ export default function Plugins({ plugin }: { plugin: any }) {
             if (Date.now() < refusedUntil) throw new Error('the person said no; ask again later');
             asking = true;
             let yes = false;
-            try { yes = await askRef.current({ title: `${who} wants to run “${ba.label}” on ${b.info?.name || m.key}`, text: `The board asks before “${ba.label}” runs. Only allow this if you trust this plugin.`, yes: ba.label }); } finally { asking = false; }
+            try { yes = await askPerson({ title: `${who} wants to run “${ba.label}” on ${b.info?.name || m.key}`, text: `The board asks before “${ba.label}” runs. Only allow this if you trust this plugin.`, yes: ba.label }); } finally { asking = false; }
             if (!yes) { refusedUntil = Date.now() + ASK_AGAIN_MS; throw new Error('the person said no'); }
           }
           const req = { ...m.req };
@@ -108,8 +114,8 @@ export default function Plugins({ plugin }: { plugin: any }) {
           let yes = false;
           try {
             yes = m.method === 'update_firmware'
-              ? await askRef.current({ title: `${who} wants to update the firmware of ${name}`, text: `The board restarts with the newest firmware release. Only allow this if you trust this plugin.`, yes: 'Allow the update' })
-              : await askRef.current({ title: `${who} wants to replace the effect script on ${name}`, text: `This script takes the place of what ${name} runs now${b.script?.text ? ' (that one is kept in your library first)' : ''}:`, script: String(m.text ?? ''), yes: 'Send this script' });
+              ? await askPerson({ title: `${who} wants to update the firmware of ${name}`, text: `The board restarts with the newest firmware release. Only allow this if you trust this plugin.`, yes: 'Allow the update' })
+              : await askPerson({ title: `${who} wants to replace the effect script on ${name}`, text: `This script takes the place of what ${name} runs now${b.script?.text ? ' (that one is kept in your library first)' : ''}:`, script: String(m.text ?? ''), yes: 'Send this script' });
           } finally { asking = false; }
           if (!yes) { refusedUntil = Date.now() + ASK_AGAIN_MS; throw new Error('the person said no'); }
           actRef.current.log(`${who} → ${name}: ${m.method === 'update_firmware' ? 'firmware update (allowed)' : 'effect script (allowed)'}`);
@@ -156,7 +162,7 @@ export default function Plugins({ plugin }: { plugin: any }) {
       for (const f of mqttSubs) void call('mqtt_unwatch', { filter: f }).catch(() => {});
       // the plugin's page is gone: every output it turned on is let go
       for (const [key, chans] of lit) for (const ch of chans) void rpc(key, { op: 'set_output', channel: ch, level: null }).catch(() => {});
-      askRef.current = async () => false;
+      active = false;
     };
   }, [plugin?.id, consented]); // eslint-disable-line react-hooks/exhaustive-deps
 
