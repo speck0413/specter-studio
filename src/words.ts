@@ -53,6 +53,9 @@ export function boardKind(info: any): string {
   if (info?.kind && info.kind !== 'info') return String(info.kind);
   switch (info?.mcu) {
     case 'esp32-devkit': return 'ESP32 board';
+    // the bare devkits (the firmware's BARE-DEVKIT.md): no Proptroller board takes these chips
+    case 'esp32-s3': return 'ESP32-S3 board';
+    case 'esp32-c3': return 'ESP32-C3 board';
     case 'pico': return 'Raspberry Pi Pico (USB only)';
     case 'pico-w': case 'picow': return 'Raspberry Pi Pico W';
     case 'pico2-w': case 'pico2w': return 'Raspberry Pi Pico 2 W';
