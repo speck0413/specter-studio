@@ -1,5 +1,5 @@
-// The SD card tool: put sounds on the card for the board's sound player (a DFPlayer Mini), numbered and in the
-// right order, and check a card. The card work happens in the core (core/src/sdcard); this page lists the
+// The SD card tool: put sounds on the card for the board's sound player (a DFPlayer Mini), one sound per folder
+// (`01/001-rain.mp3`, `02/001-elevator.mp3` …), and check a card. The card work happens in the core (core/src/sdcard); this page lists the
 // sounds, picks the card, asks before anything is erased and shows the number -> file map.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -14,7 +14,7 @@ import { call, inTauri, onEvent, pickFiles, pickFolder, pickSavePath } from '../
 import { useStore } from '../store';
 import { useBoardActions } from '../components/actions';
 import { sectionSx, sectionsSx } from '../components/section';
-import { cardName, isAudio, mapText, MP3_FOLDER_MAX, move, sizeWords, soundsCsv, type MapRow } from '../sdcard/list';
+import { cardName, isAudio, mapText, SOUND_FOLDERS_MAX, move, sizeWords, soundsCsv, type MapRow } from '../sdcard/list';
 
 interface SoundItem { id: number; path: string; name: string; description: string; ext: string; size: number; ok: boolean; why?: string | null }
 interface DriveChoice {
@@ -87,7 +87,7 @@ export default function SdCard() {
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [drives, setDrives] = useState<DriveChoice[]>([]);
-  const [info, setInfo] = useState<{ card_max_bytes: number; windows: boolean; windows_fat32_max_bytes: number } | null>(null);
+  const [info, setInfo] = useState<{ card_max_bytes: number; sounds_max: number; windows: boolean; windows_fat32_max_bytes: number } | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [picked, setPicked] = useState('');
   const [format, setFormat] = useState(true);
@@ -138,7 +138,8 @@ export default function SdCard() {
   }, [add]);
 
   const tooBigForWindows = !!(info?.windows && drive && format && drive.size > info.windows_fat32_max_bytes);
-  const canCopy = !busy && sounds.length > 0 && sounds.length <= MP3_FOLDER_MAX && !!drive?.can_write && !tooBigForWindows;
+  const soundsMax = info?.sounds_max ?? SOUND_FOLDERS_MAX;
+  const canCopy = !busy && sounds.length > 0 && sounds.length <= soundsMax && !!drive?.can_write && !tooBigForWindows;
 
   const write = async (extra: Record<string, unknown>) => {
     setBusy(true); setError(''); setResult(null); setSaved(''); setReport(null); setFixed(null);
@@ -173,7 +174,7 @@ export default function SdCard() {
   };
   const fix = async () => {
     if (!drive) return;
-    if (!(await act.confirm(`Fix the card “${drive.name}”?`, 'Studio first copies every file in the card\'s mp3 folder to this computer and checks the copies. Only then it deletes the mp3 folder and writes the sounds back in number order, numbered 1, 2, 3 … without gaps. Hidden Mac files are deleted. Files the player cannot play stay only in the copy on this computer.', 'Fix the card'))) return;
+    if (!(await act.confirm(`Fix the card “${drive.name}”?`, 'Studio first copies every file in the card\'s sound folders (01, 02 …) to this computer and checks the copies. Only then it changes the card: hidden Mac files are deleted, a folder with more than one sound keeps the one starting with 001 (or the lowest-numbered) and the others move off the card, files the player cannot play move off the card, and a sound that does not start with 001 is renamed to 001-…. Whatever moves off stays in the copy on this computer. The numbers do not change.', 'Fix the card'))) return;
     setBusy(true); setError('');
     try {
       const r = await call('sdcard_fix', { drive: picked });
@@ -194,11 +195,11 @@ export default function SdCard() {
       <Typography variant="h5" component="h2">SD card for sounds</Typography>
       <Typography sx={{ mt: 1 }}>
         The board's sound player plays sounds from an SD card by number: in a script, <code>audio_single = 3</code> plays sound 3.
-        Studio puts your sounds on the card in the right order, named <code>mp3/0001-rain.mp3</code>, <code>mp3/0002-elevator.mp3</code> and so on.
+        Studio puts each sound in its own folder on the card: sound 1 is <code>01/001-rain.mp3</code>, sound 2 is <code>02/001-elevator.mp3</code> and so on.
       </Typography>
       <Typography color="text.secondary" sx={{ mt: 1 }}>
-        The player plays MP3 and WAV files (8 to 48 kHz), up to {MP3_FOLDER_MAX} of them. It counts the files in the order they were written to the card,
-        not by name, so always put sounds on with Studio (dragging files onto the card yourself can mix the numbers up).
+        The player plays MP3 and WAV files (8 to 48 kHz), up to {soundsMax} sounds, folders 01 to {soundsMax}. The folder gives the number, so the order
+        files are copied in does not matter.
       </Typography>
       {error && <Alert severity="error" onClose={() => setError('')} sx={{ mt: 2 }} data-testid="sd-error">{error}</Alert>}
       {note && <Alert severity="info" onClose={() => setNote('')} sx={{ mt: 2 }} data-testid="sd-note">{note}</Alert>}
@@ -212,7 +213,7 @@ export default function SdCard() {
             <Typography color="text.secondary">or drag MP3 and WAV files here. Sound 1 is at the top.</Typography>
           </Stack>
           {sounds.length > 0 && <Box sx={{ mt: 2 }}><SoundList items={sounds} setItems={(f) => { setSounds(f); setResult(null); }} /></Box>}
-          {sounds.length > MP3_FOLDER_MAX && <Alert severity="error" sx={{ mt: 1 }}>That is {sounds.length} sounds; the player plays at most {MP3_FOLDER_MAX}.</Alert>}
+          {sounds.length > soundsMax && <Alert severity="error" sx={{ mt: 1 }}>That is {sounds.length} sounds; a card holds at most {soundsMax} (one per folder, 01 to {soundsMax}). Take some off the list.</Alert>}
         </Box>
       </Box>
 
@@ -239,7 +240,7 @@ export default function SdCard() {
         </Box>
         <FormControlLabel sx={{ mt: 1 }} control={<Checkbox checked={format} onChange={(e) => setFormat(e.target.checked)} />}
           label="Erase and format the card as FAT32 first (best: a clean card in the format the player reads)" />
-        {!format && <Typography variant="body2" color="text.secondary">Without formatting, Studio shows you every file on the card, deletes them all when you agree, and makes the mp3 folder new.</Typography>}
+        {!format && <Typography variant="body2" color="text.secondary">Without formatting, Studio shows you every file on the card, deletes them all when you agree, and makes the sound folders new.</Typography>}
         {tooBigForWindows && <Alert severity="warning" sx={{ mt: 1 }} data-testid="sd-windows-big">
           Windows' own format tool will not make FAT32 on a card bigger than 32 GB. Either use a card of 32 GB or less (plenty for sounds), or format this card
           once with a free tool such as “FAT32 Format” or Rufus, then untick “Erase and format” and copy again.
@@ -260,7 +261,7 @@ export default function SdCard() {
         </Box>}
         {result && (
           <Box sx={{ mt: 2 }} data-testid="sd-map">
-            <Alert severity="success">The sounds are on the card, in this order. {result.notes.join(' ')}</Alert>
+            <Alert severity="success">The sounds are on the card, one folder each. {result.notes.join(' ')}</Alert>
             <Box component="table" sx={{ mt: 2, borderCollapse: 'collapse', '& td, & th': { py: 0.5, pr: 3, textAlign: 'left', borderBottom: 1, borderColor: 'divider' } }}>
               <thead><tr><th scope="col">Number in scripts</th><th scope="col">File on the card</th></tr></thead>
               <tbody>{result.map.map((r) => <tr key={r.number} data-testid="sd-map-row"><td>{r.number}</td><td>{r.name}</td></tr>)}</tbody>
@@ -284,7 +285,7 @@ export default function SdCard() {
 
       <Box sx={sectionSx}>
         <Typography variant="h6" component="h3">Check a card</Typography>
-        <Typography color="text.secondary">Reads the card and tells you, in the order the player sees them, which sound each number plays, and anything that would make a number play the wrong sound.</Typography>
+        <Typography color="text.secondary">Reads the card and tells you which sound each number plays, and anything that would make a number play nothing or the wrong sound.</Typography>
         <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
           <Button variant="outlined" disabled={!drive || busy} onClick={() => void check()} data-testid="sd-check">Check the card</Button>
           <Button onClick={async () => { const f = await pickFolder('Check a folder (a copy of a card)'); if (f) void check(f); }} disabled={busy}>Check a folder…</Button>
@@ -292,14 +293,14 @@ export default function SdCard() {
         {report && (
           <Box sx={{ mt: 2 }} data-testid="sd-check-report">
             {report.r.problems.length === 0
-              ? <Alert severity="success">No problems found on {report.where}{report.r.fs_words ? ` (${report.r.fs_words})` : ''}: {report.r.files.length} sound{report.r.files.length === 1 ? '' : 's'}, in order.</Alert>
+              ? <Alert severity="success">No problems found on {report.where}{report.r.fs_words ? ` (${report.r.fs_words})` : ''}: {report.r.files.length} sound{report.r.files.length === 1 ? '' : 's'}.</Alert>
               : <Stack spacing={1}>{report.r.problems.map((p) => <Alert key={p.code} severity="warning" data-testid={`sd-problem-${p.code}`}>{p.words}</Alert>)}</Stack>}
             {report.r.fixable && report.card && drive?.can_write && (
               <Button variant="contained" sx={{ mt: 2 }} disabled={busy} onClick={() => void fix()}>Fix the card…</Button>
             )}
             {report.r.files.length > 0 && (
-              <Box component="ol" aria-label="Sounds on the card, in the order the player sees them" sx={{ mt: 2, pl: 3 }}>
-                {report.r.files.map((f) => <li key={f.position}>{f.name}{f.number !== null && f.number !== f.position ? ` (named ${f.number}, plays as ${f.position})` : ''}</li>)}
+              <Box component="ul" aria-label="Sounds on the card" sx={{ mt: 2, pl: 3 }}>
+                {report.r.files.map((f) => <li key={f.position}>sound {f.position}: {f.name}</li>)}
               </Box>
             )}
           </Box>
@@ -307,8 +308,9 @@ export default function SdCard() {
         {fixed && (
           <Alert severity="info" sx={{ mt: 2 }} data-testid="sd-fixed">
             The card is fixed. A copy of what was on it is kept on this computer in {fixed.backup}.
-            {fixed.renamed?.length > 0 && <> Changed numbers (update scripts that use them): {fixed.renamed.map((r: any) => `${r.from} is now ${r.number}`).join('; ')}.</>}
-            {fixed.left_off?.length > 0 && <> Not put back (the player cannot play them): {fixed.left_off.join(', ')}.</>}
+            {fixed.renamed?.length > 0 && <> Renamed: {fixed.renamed.map((r: any) => `${r.from} is now ${r.to}`).join('; ')}.</>}
+            {fixed.left_off?.length > 0 && <> Moved off the card (kept in the copy): {fixed.left_off.join(', ')}.</>}
+            {fixed.deleted_hidden?.length > 0 && <> Hidden Mac files deleted: {fixed.deleted_hidden.length}.</>}
           </Alert>
         )}
       </Box>
@@ -333,7 +335,7 @@ export default function SdCard() {
         <Dialog open onClose={() => setDel(null)} aria-labelledby="sd-delete-title" fullWidth maxWidth="sm">
           <DialogTitle id="sd-delete-title">Delete these files from the card?</DialogTitle>
           <DialogContent>
-            <Typography gutterBottom>To keep the numbers right, Studio deletes everything on the card first ({del.length} file{del.length === 1 ? '' : 's'} and folder{del.length === 1 ? '' : 's'}), then copies your sounds:</Typography>
+            <Typography gutterBottom>To start clean, Studio deletes everything on the card first ({del.length} file{del.length === 1 ? '' : 's'} and folder{del.length === 1 ? '' : 's'}), then copies your sounds:</Typography>
             <Box component="ul" data-testid="sd-delete-list" sx={{ maxHeight: 260, overflow: 'auto', fontFamily: 'monospace', fontSize: 'body2.fontSize' }}>
               {del.map((n) => <li key={n}>{n}</li>)}
             </Box>

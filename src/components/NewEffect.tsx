@@ -70,7 +70,7 @@ export default function NewEffect({ open, onClose, onCreate, labels = {}, boardN
               {OUTPUTS.filter(([v]) => v !== output).map(([v, l]) => <MenuItem key={v} value={v}>{choiceLabel(v, l, labels)}</MenuItem>)}
             </TextField>
             <TextField type="number" label="For how many seconds" value={seconds} inputProps={{ min: 0.1, step: 0.1 }} onChange={(e) => setSeconds(Number(e.target.value) || 1)} />
-            <TextField select label="Play a sound too" value={sound} onChange={(e) => setSound(e.target.value)} helperText="Sound 1 is the one file in the card's folder 01 (Studio's SD card tool puts your sounds there).">
+            <TextField select label="Play a sound too" value={sound} onChange={(e) => setSound(e.target.value)} helperText="Sound 1 is the card's mp3/0001-….mp3 (Studio's SD card tool puts your sounds there in order).">
               <MenuItem value="no">No</MenuItem>
               <MenuItem value="yes">Yes, sound 1</MenuItem>
             </TextField>

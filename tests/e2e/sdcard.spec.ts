@@ -27,7 +27,7 @@ test.beforeAll(async ({ browser }) => {
 
 test.afterAll(() => { fs.rmSync(sounds, { recursive: true, force: true }); fs.rmSync(ws, { recursive: true, force: true }); });
 
-test('sounds go on the card numbered, in the order of the list, and Check finds nothing wrong', async () => {
+test('each sound goes in its own numbered folder, in the order of the list, and Check finds nothing wrong', async () => {
   // reachable from the library's side bar
   await page.getByRole('tab', { name: 'Your library' }).click();
   await page.getByTestId('library-sdcard').click();
@@ -49,7 +49,7 @@ test('sounds go on the card numbered, in the order of the list, and Check finds 
   await page.getByRole('button', { name: 'Move scream up' }).focus();
   await page.keyboard.press('Enter');
   await expect(labels).toHaveText(['1 · rain', '2 · scream', '3 · elevator']);
-  await expect(page.getByTestId('sd-sounds')).toContainText('0002-scream.wav');
+  await expect(page.getByTestId('sd-sounds')).toContainText('02/001-scream.wav');
 
   // copy, with Erase and format ticked (the default): the card's name is typed to confirm
   await expect(page.getByRole('checkbox', { name: /Erase and format/ })).toBeChecked();
@@ -60,10 +60,12 @@ test('sounds go on the card numbered, in the order of the list, and Check finds 
   await dlg.getByRole('button', { name: 'Erase and copy' }).click();
 
   const map = page.getByTestId('sd-map');
-  await expect(map.getByTestId('sd-map-row')).toHaveText(['10001-rain.mp3', '20002-scream.wav', '30003-elevator.mp3'], { timeout: 15_000 });
-  expect(fs.readdirSync(card).sort()).toEqual(['mp3']);
-  expect(fs.readdirSync(path.join(card, 'mp3')).sort()).toEqual(['0001-rain.mp3', '0002-scream.wav', '0003-elevator.mp3']);
-  expect(fs.readFileSync(path.join(card, 'mp3', '0002-scream.wav'), 'utf8')).toBe('SCREAM!');
+  await expect(map.getByTestId('sd-map-row')).toHaveText(['101/001-rain.mp3', '202/001-scream.wav', '303/001-elevator.mp3'], { timeout: 15_000 });
+  expect(fs.readdirSync(card).sort()).toEqual(['01', '02', '03']);
+  expect(fs.readdirSync(path.join(card, '01'))).toEqual(['001-rain.mp3']);
+  expect(fs.readdirSync(path.join(card, '02'))).toEqual(['001-scream.wav']);
+  expect(fs.readdirSync(path.join(card, '03'))).toEqual(['001-elevator.mp3']);
+  expect(fs.readFileSync(path.join(card, '02', '001-scream.wav'), 'utf8')).toBe('SCREAM!');
   // the person's own files are still there
   expect(fs.readdirSync(sounds).sort()).toEqual(['elevator.mp3', 'rain.mp3', 'scream.wav']);
 
@@ -72,10 +74,10 @@ test('sounds go on the card numbered, in the order of the list, and Check finds 
   await expect(page.getByTestId('sd-saved')).toContainText('sounds.csv');
   expect(fs.readFileSync(path.join(ws, 'sounds.csv'), 'utf8')).toBe('number,file\n1,rain.mp3\n2,scream.wav\n3,elevator.mp3\n');
 
-  // Check the card: in order, nothing wrong
+  // Check the card: nothing wrong, each number's sound listed
   await page.getByTestId('sd-check').click();
-  await expect(page.getByTestId('sd-check-report')).toContainText('No problems found on SPOOKY (FAT): 3 sounds, in order.');
-  await expect(page.getByTestId('sd-check-report').getByRole('list')).toContainText('0002-scream.wav');
+  await expect(page.getByTestId('sd-check-report')).toContainText('No problems found on SPOOKY (FAT): 3 sounds.');
+  await expect(page.getByTestId('sd-check-report').getByRole('list')).toContainText('sound 2: 02/001-scream.wav');
   await page.screenshot({ path: test.info().outputPath('sd-card.png'), fullPage: true });
 
   // no serious accessibility problems, light and dark
@@ -95,11 +97,12 @@ test('a card copied without formatting lists what it deletes first', async () =>
   await page.getByRole('checkbox', { name: /Erase and format/ }).uncheck();
   await page.getByTestId('sd-copy').click();
   const dlg = page.getByRole('dialog', { name: 'Delete these files from the card?' });
-  await expect(dlg.getByTestId('sd-delete-list')).toContainText('mp3/0001-rain.mp3');
+  await expect(dlg.getByTestId('sd-delete-list')).toContainText('01/001-rain.mp3');
   await expect(dlg.getByTestId('sd-delete-list')).toContainText('stray.txt');
   await dlg.getByRole('button', { name: 'Delete and copy' }).click();
   await expect(page.getByTestId('sd-map').getByTestId('sd-map-row')).toHaveCount(3, { timeout: 15_000 });
   expect(fs.existsSync(path.join(card, 'stray.txt'))).toBe(false);
+  expect(fs.readdirSync(card).sort()).toEqual(['01', '02', '03']);
   await page.getByTestId('sd-check').click();
   await expect(page.getByTestId('sd-check-report')).toContainText('No problems found');
 });

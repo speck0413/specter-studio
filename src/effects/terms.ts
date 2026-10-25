@@ -15,16 +15,16 @@ export interface Term {
 export interface Sound { n: number; description: string }
 
 /**
- * The sounds from a file name -> number map (the library's sounds.csv or a card's names): `02/001-scream.mp3` is
- * 2 · scream. The description is the name without its folder, number and extension.
+ * The sounds from a file name -> number map (the library's or a board's): `0002-scream.mp3` is 2 · scream. The
+ * description is the name without its number and extension.
  */
 export function soundList(map: Record<string, unknown> | null | undefined): Sound[] {
   const out = new Map<number, Sound>();
   for (const [file, num] of Object.entries(map || {})) {
     const lead = /^(\d+)/.exec(file);
     const n = Number(num ?? lead?.[1]);
-    if (!Number.isInteger(n) || n < 1 || n > 99 || out.has(n)) continue;
-    out.set(n, { n, description: file.replace(/^\d+[\\/]/, '').replace(/^\d+[-_ ]*/, '').replace(/\.[a-z0-9]+$/i, '') });
+    if (!Number.isInteger(n) || n < 1 || out.has(n)) continue;
+    out.set(n, { n, description: file.replace(/^\d+[-_ ]*/, '').replace(/\.[a-z0-9]+$/i, '') });
   }
   return [...out.values()].sort((a, b) => a.n - b.n);
 }

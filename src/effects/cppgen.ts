@@ -124,7 +124,7 @@ export function scriptToCpp(text: string): string {
   return [
     '// Made by Specter Studio from an effect script, for the Proptroller beginner layer (Proptroller.h).',
     '// Steps start together unless a wait() moves the time on; a wait line is a wait(), a fade is followed by one.',
-    '// Sounds: playSound(N) plays sound N, the one file in the card\'s folder NN, the same file as the script\'s audio_single = N.',
+    '// Sounds: playSound(N) plays sound N, the card\'s mp3/000N-….mp3, the same file as the script\'s audio_single = N.',
     '#include <Arduino.h>',
     '#include <Proptroller.h>',
     '',

@@ -74,6 +74,6 @@ describe('sounds are numbers', () => {
     }
     ws.dispose();
     for (const w of ['audio_single', 'audio_loop', 'audio_volume', 'audio_stop', 'wait', 'sleep']) texts.push(hoverFor(w) ?? '');
-    for (const t of texts) for (const m of t.match(/\S*\.mp3/g) || []) expect(m).toMatch(/^\(?([0-9N]{2}\/)?001-(…|<description>)\.mp3\)?[.,]?$/);
+    for (const t of texts) for (const m of t.match(/\S*\.mp3/g) || []) expect(m).toMatch(/^(mp3\/)?([0-9N]{4})-(…|<description>)\.mp3[.,]?$/);
   });
 });

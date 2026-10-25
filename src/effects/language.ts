@@ -24,7 +24,7 @@ const HELP: Record<string, string> = {
   to: 'The level a fade goes to: on, off or a percentage.',
   over: 'How long a fade takes.',
   flicker: 'Flickers a dimmable output at random like a failing bulb, then gives its level back: `flicker out1 for 3`.',
-  audio_single: 'Plays a sound once by its number (1 to 99): `audio_single = 3` plays the one file in the card\'s folder 03 (03/001-<description>.mp3). One sound plays at a time: a new one replaces it.',
+  audio_single: 'Plays a sound once by its number: `audio_single = 3` plays the card\'s file mp3/0003-<description>.mp3. One sound plays at a time: a new one replaces it.',
   audio_loop: 'The background sound: `audio_loop = 2` plays sound 2 over and over; a sound played with audio_single takes over and the loop comes back after it. Above the first "wait for" it starts at power-on and again each time the effect is back at its top. `audio_loop = off` ends it.',
   audio_stop: 'Stops the sound, and the background loop.',
   audio_volume: 'How loud the script\'s sounds play from this line on: `audio_volume = 60%` (0% to 100%, or `off`). Kept until the next audio_volume or a restart; the board\'s ambient and trigger volume settings stay as they are.',
