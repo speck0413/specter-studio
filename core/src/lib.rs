@@ -18,7 +18,6 @@ pub mod library;
 pub mod monitor;
 pub mod mqtt;
 pub mod nightlog;
-pub mod patterns;
 pub mod plugins;
 pub mod projects;
 pub mod sdcard;
@@ -828,7 +827,7 @@ impl Studio {
                 let ws = std::path::PathBuf::from(folder(&a)?);
                 std::fs::create_dir_all(&ws).map_err(|e| format!("cannot make {}: {e}", ws.display()))?;
                 self.remember_workspace(folder(&a)?);
-                for d in [library::effects_dir(&ws), patterns::patterns_dir(&ws), projects::firmware_dir(&ws), ws.join(".specter")] {
+                for d in [library::effects_dir(&ws), projects::firmware_dir(&ws), ws.join(".specter")] {
                     std::fs::create_dir_all(&d).map_err(|e| format!("cannot make {}: {e}", d.display()))?;
                 }
                 if let Some(ard) = arduino_dir() {
@@ -867,12 +866,6 @@ impl Studio {
             "library_rename" => library::rename(folder(&a)?.as_ref(), arg(&a, "from")?, arg(&a, "to")?).map(|_| json!(null)),
             "library_delete" => library::delete(folder(&a)?.as_ref(), arg(&a, "name")?).map(|_| json!(null)),
             "library_identify" => Ok(library::identify(folder(&a)?.as_ref(), arg(&a, "text")?)),
-            // LED patterns (patterns.rs): `<library>/patterns/<name>.pattern.js`, `source/name` in a script source
-            "pattern_list" => Ok(json!(patterns::list(folder(&a)?.as_ref()))),
-            "pattern_read" => patterns::read(folder(&a)?.as_ref(), arg(&a, "name")?).map(|t| json!(t)),
-            "pattern_save" => patterns::save(folder(&a)?.as_ref(), arg(&a, "name")?, arg(&a, "text")?, a["new"] == true).map(|_| json!(null)),
-            "pattern_rename" => patterns::rename(folder(&a)?.as_ref(), arg(&a, "from")?, arg(&a, "to")?).map(|_| json!(null)),
-            "pattern_delete" => patterns::delete(folder(&a)?.as_ref(), arg(&a, "name")?).map(|_| json!(null)),
             "send_script" => {
                 // the newest library version, with its header line, to a board (the board checks it); or `text`, a
                 // script edited on the board's page and sent to that board only: under `name` it carries a header
@@ -937,7 +930,7 @@ impl Studio {
 
 /// The commands that change files in the library (auto save follows them).
 fn gitsync_saves(cmd: &str) -> bool {
-    matches!(cmd, "library_save" | "library_rename" | "library_delete" | "file_write" | "firmware_new" | "pattern_save" | "pattern_rename" | "pattern_delete")
+    matches!(cmd, "library_save" | "library_rename" | "library_delete" | "file_write" | "firmware_new")
 }
 
 impl Studio {

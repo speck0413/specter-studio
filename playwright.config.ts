@@ -33,6 +33,8 @@ export default defineConfig({
     launchOptions: { executablePath: process.env.CHROMIUM || '/usr/bin/google-chrome' },
     viewport: { width: 1300, height: 900 },
     screenshot: 'only-on-failure',
+    // on CI a failed test keeps its trace (actions, page snapshots, console) in test-results, uploaded by the workflow
+    trace: process.env.CI ? 'retain-on-failure' : 'off',
   },
   webServer: [
     // GitHub's release API, faked: the default firmware release source never reaches the internet in tests
