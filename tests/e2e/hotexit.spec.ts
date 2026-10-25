@@ -26,12 +26,7 @@ test.beforeAll(async ({ browser }) => {
   await page.goto('/');
 });
 
-test.afterAll(async () => {
-  // this file's Studio page goes too: a page left open keeps talking to the shared device layer (and loading the
-  // browser) through every later file
-  await page?.context().close();
-  fs.rmSync(ws, { recursive: true, force: true });
-});
+test.afterAll(() => fs.rmSync(ws, { recursive: true, force: true }));
 
 async function openEffect() {
   await page.getByRole('tab', { name: 'Your library' }).click();
