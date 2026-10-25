@@ -416,16 +416,24 @@ impl Studio {
                 self.conn(arg(&a, "key")?)?.rpc(req).await
             }
             "sim_start" => {
+                // a practice board: an id of its own and a UDP port of its own, in the practice boards' link relay,
+                // so its tell lines reach the other practice boards (sim.rs "the practice boards' board link")
+                let name = opt_str(&a, "name");
+                let discovery_port = match a["discovery_port"].as_u64() {
+                    Some(p) => p as u16,
+                    None => sim::free_udp_port()?,
+                };
                 let o = sim::SimOptions {
-                    name: opt_str(&a, "name"),
-                    id: opt_str(&a, "id"),
+                    id: opt_str(&a, "id").or_else(|| Some(sim::practice_id(name.as_deref()))),
+                    name,
                     // SPECTER_SIM_SPEED runs practice boards faster (UI tests: the 30 s self-check after an update)
                     speed: a["speed"].as_f64().or_else(|| std::env::var("SPECTER_SIM_SPEED").ok()?.parse().ok()),
                     fail_self_check: a["fail_self_check"] == true,
                     swap_ms: a["swap_ms"].as_u64(),
-                    discovery_port: a["discovery_port"].as_u64().unwrap_or(0) as u16,
+                    discovery_port,
                     port: None,
                     link_peers: opt_str(&a, "link_peers"),
+                    link_relay: true,
                 };
                 let o2 = o.clone();
                 let s = tokio::task::spawn_blocking(move || sim::start(&o)).await.map_err(|e| e.to_string())??;

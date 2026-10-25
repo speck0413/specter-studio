@@ -96,7 +96,7 @@ test('typeahead after tell: the other boards by network name and all, then the b
   await page.keyboard.type('porc', { delay: 20 });
   await page.keyboard.press('Enter');
   await expect(suggest).toBeVisible();
-  await expect(suggest).toContainText('blackout');
+  await expect(suggest.locator('.monaco-list-row').filter({ hasText: 'blackout' })).toBeVisible();
   await page.keyboard.press('Enter');
   await expect.poll(text).toBe('effect doorbell:\n  wait for trig1\n  wait 1\n  tell porch blackout');
   await expect(page.getByTestId('check')).toContainText('Looks good', { timeout: 10_000 });
@@ -138,7 +138,7 @@ test('the board link settings: the key is set-only, and with the same key on bot
   await expect(key).toHaveValue('');
   await key.fill(KEY);
   await page.getByRole('button', { name: 'Save settings' }).click();
-  await expect(page.getByText('Saved.')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('Saved.', { exact: true })).toBeVisible({ timeout: 10_000 });
   // never shown or read back
   await expect(key).toHaveValue('');
   await expect(page.getByText(/\(set\) Type a new one/).first()).toBeVisible();
@@ -151,4 +151,61 @@ test('the board link settings: the key is set-only, and with the same key on bot
   expect((await rpc(porch, { op: 'set_params', values: [{ key: 'link_key', value: KEY }] })).ok).toBe(true);
   await ring();
   await expect.poll(() => out1(porch), { timeout: 5000 }).toBe(1000);
+});
+
+test('two practice boards added with "Add a practice board" tell each other out of the box', async () => {
+  const before = new Set(((await dl('connections')) as any[]).map((c) => c.key));
+  const list = async () => {
+    await page.getByRole('tablist', { name: 'Sections' }).getByRole('tab', { name: 'Boards' }).click();
+    const all = page.getByRole('button', { name: 'All boards', exact: true });
+    if (await all.isVisible()) await all.click();
+  };
+  await list();
+  const add = page.getByRole('button', { name: /Add a practice board/ });
+  if (!(await add.isVisible())) await page.getByRole('button', { name: 'Add a board' }).click();
+  const added = async (n: number) => {
+    const fresh = async () => ((await dl('connections')) as any[]).filter((c) => !before.has(c.key) && c.info?.name);
+    await expect.poll(async () => (await fresh()).length, { timeout: 15_000 }).toBe(n);
+    return fresh();
+  };
+  await add.click();
+  await added(1);
+  await list();
+  if (!(await add.isVisible())) await page.getByRole('button', { name: 'Add a board' }).click();
+  await add.click();
+  const [a, b] = (await added(2)).sort((x, y) => x.info.name.localeCompare(y.info.name, undefined, { numeric: true }));
+  expect(a.info.id).not.toBe(b.info.id);
+  const label = b.info.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  try {
+    expect((await rpc(b.key, { op: 'set_script', text: PORCH_SCRIPT })).result.ok).toBe(true);
+    expect((await rpc(b.key, { op: 'set_params', values: [{ key: 'remote_free_effects', value: 'blackout' }] })).ok).toBe(true);
+    expect((await rpc(a.key, { op: 'set_script', text: DOORBELL })).result.ok).toBe(true);
+    // the tell line typed on the first board, the second offered by its network name
+    await list();
+    // Studio has read the second board's new script (its effects are offered after its name)
+    await expect(page.getByTestId(`board-${b.info.name}`).getByTestId('script-badge')).not.toHaveText('No effect script', { timeout: 10_000 });
+    await page.getByTestId(`board-${a.info.name}`).getByRole('button', { name: 'Open' }).click();
+    await page.getByRole('tablist', { name: 'Board sections' }).getByRole('tab', { name: 'Effect script' }).click();
+    await expect(box().locator('.view-lines')).toContainText('wait 1', { timeout: 15_000 });
+    const suggest = box().locator('.suggest-widget');
+    await box().locator('.view-lines').click();
+    await page.keyboard.press('ControlOrMeta+End');
+    await page.keyboard.type('  tell ', { delay: 20 });
+    await expect(suggest).toContainText(label);
+    // typed out in full, the space then offers its effects
+    await page.keyboard.type(`${label} `, { delay: 10 });
+    await expect(suggest.locator('.monaco-list-row').filter({ hasText: 'blackout' })).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('check')).toContainText('Looks good', { timeout: 10_000 });
+    await page.getByRole('button', { name: 'Send to this board only' }).click();
+    // (the line is checked as sent: the editor wraps a line this long over two rows on the screen)
+    await expect.poll(async () => (await rpc(a.key, { op: 'get_script' })).result.text, { timeout: 10_000 }).toBe(`effect doorbell:\n  wait for trig1\n  wait 1\n  tell ${label} blackout`);
+    expect(await out1(b.key)).toBe(0);
+    await rpc(a.key, { op: 'sim_input', input: 'TRIG1', active: true });
+    await new Promise((r) => setTimeout(r, 300));
+    await rpc(a.key, { op: 'sim_input', input: 'TRIG1', active: false });
+    await expect.poll(() => out1(b.key), { timeout: 5000 }).toBe(1000);
+  } finally {
+    for (const k of [a.key, b.key]) await dl('disconnect', { key: k }).catch(() => {});
+  }
 });
