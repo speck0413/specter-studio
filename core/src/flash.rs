@@ -110,7 +110,9 @@ pub fn esptool_script() -> PathBuf {
 /// esptool's command line for an ESP32 plan.
 pub fn esptool_command(plan: &Value, port: &str) -> Vec<String> {
     let mut c = vec![pio_python().to_string_lossy().to_string(), esptool_script().to_string_lossy().to_string()];
-    for s in ["--chip", "esp32", "--port", port, "--baud", "460800", "--before", "default_reset", "--after", "hard_reset",
+    // the plan's chip: esp32, or esp32s3 / esp32c3 for the bare devkits
+    let chip = plan["chip"].as_str().unwrap_or("esp32");
+    for s in ["--chip", chip, "--port", port, "--baud", "460800", "--before", "default_reset", "--after", "hard_reset",
               "write_flash", "-z", "--flash_mode", "dio", "--flash_freq", "40m", "--flash_size", "4MB"] {
         c.push(s.to_string());
     }
@@ -134,6 +136,15 @@ pub fn release_plan(mcu: &str, file: &Path) -> Result<Value, String> {
                 return Err("the first-flash image is not a merged ESP32 image".into());
             }
             Ok(json!({ "board": "esp32dev", "kind": "esptool", "chip": "esp32", "flash": { "mode": "dio", "freq": "40m", "size": "4MB" }, "parts": [p] }))
+        }
+        // the bare devkits' ESP32-S3 and ESP32-C3 (the firmware's BARE-DEVKIT.md): their bootloader starts the merged
+        // image at 0x0, its header naming the chip (9 ESP32-S3, 5 ESP32-C3)
+        "esp32-s3" | "esp32-c3" => {
+            let (chip, id) = if mcu == "esp32-s3" { ("esp32s3", 9u8) } else { ("esp32c3", 5u8) };
+            if bytes.first() != Some(&0xE9) || bytes.get(12) != Some(&id) {
+                return Err(format!("the first-flash image is not a merged {} image", mcu.to_uppercase()));
+            }
+            Ok(json!({ "board": mcu, "kind": "esptool", "chip": chip, "flash": { "mode": "dio", "freq": "40m", "size": "4MB" }, "parts": [p] }))
         }
         "pico-w" | "pico2-w" | "pico" => {
             if uf2_family(&bytes).is_none() {
@@ -237,4 +248,35 @@ pub async fn run(p: Value, a: &Value) -> Result<Value, String> {
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
     Err("the board did not take the firmware (it is still waiting in BOOTSEL mode): it may be another kind of Pico, or the image is damaged".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // the bare devkits' S3 and C3 first-flash images (bootloader at 0x0): esptool gets the chip; another chip's image
+    // or a classic ESP32 one is refused
+    #[test]
+    fn s3_and_c3_first_flash_plans() {
+        let d = std::env::temp_dir().join(format!("specter-flash-test-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let img = |chip: u8| {
+            let mut b = vec![0xFFu8; 64];
+            b[0] = 0xE9;
+            b[12] = chip;
+            b
+        };
+        let f = d.join("c3.bin");
+        std::fs::write(&f, img(5)).unwrap();
+        let p = release_plan("esp32-c3", &f).unwrap();
+        assert_eq!(p["chip"], "esp32c3");
+        let cmd = esptool_command(&p, "/dev/ttyACM0");
+        assert_eq!(cmd[2..4].join(" "), "--chip esp32c3");
+        assert!(release_plan("esp32-s3", &f).unwrap_err().contains("not a merged ESP32-S3 image"));
+        let s3 = d.join("s3.bin");
+        std::fs::write(&s3, img(9)).unwrap();
+        assert_eq!(release_plan("esp32-s3", &s3).unwrap()["chip"], "esp32s3");
+        assert!(release_plan("esp32-devkit", &s3).is_err());
+        std::fs::remove_dir_all(&d).ok();
+    }
 }

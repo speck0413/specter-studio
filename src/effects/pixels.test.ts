@@ -58,6 +58,27 @@ describe('the light the pixels block', () => {
     expect(menu(b, 'COLOUR')[0][0]).toBe('its own colours');
     expect(blocksToText(ws)).toBe('effect a:\n  wait for trig1\n  pixels = rainbow\n');
   });
+  it('offers no colour after an effect that takes none: rainbow and fire have their own, off none', () => {
+    const ws = load('effect a:\n  wait for trig1\n  pixels = chase red\n');
+    const b = pixels(ws);
+    expect(menu(b, 'COLOUR').length).toBe(PIXEL_COLOURS.length + 2);
+    for (const [effect, only] of [['fire', 'its own colours'], ['Rainbow', 'its own colours'], ['off', 'no colour (dark)']]) {
+      b.setFieldValue(effect, 'EFFECT');
+      b.setFieldValue('', 'COLOUR');
+      expect(menu(b, 'COLOUR')).toEqual([[only, '']]);
+      expect(b.getField('COLOUR')!.getText()).toBe(only);
+    }
+    // a colour written after one is kept as written and marked, as the board's checker says it
+    const text = 'effect a:\n  pixels = fire red\n  pixels = rainbow 0x00ff80\n';
+    const ws2 = load(text);
+    const [fire, rainbow] = ws2.getAllBlocks(true).filter((x) => x.type === 'ps_pixels');
+    expect(fire.getField('COLOUR')!.getText()).toBe('red (fire takes no colour)');
+    expect(rainbow.getField('COLOUR')!.getText()).toBe('0x00ff80 (rainbow takes no colour)');
+    expect(blocksToText(ws2)).toBe(text);
+    // the colour's words follow the effect
+    fire.setFieldValue('chase', 'EFFECT');
+    expect(fire.getField('COLOUR')!.getText()).toBe('red');
+  });
   it('marks what it does not know, and keeps it', () => {
     // the board reads a first word that is no effect as a colour
     const b = pixels(load('effect a:\n  pixels = glow reddish\n'));
@@ -79,6 +100,12 @@ describe('typeahead after pixels =', () => {
     expect(colours.map((c) => c.label)).toEqual([...PIXEL_COLOURS.map(([n]) => n), 'exact colour']);
     expect(colours.at(-1)).toMatchObject({ insert: '0x${1:ff8000}', snippet: true });
     expect(completionsAt('  pixels = rainbow ')).toEqual([]);
+    // no colours after an effect that takes none (SS-X2: rainbow and fire have their own, off none), in any case
+    for (const e of ['fire', 'Fire', 'rainbow', 'off', 'OFF']) {
+      expect(completionsAt(`  pixels = ${e} `)).toEqual([]);
+      expect(completionsAt(`  pixels: ${e} `)).toEqual([]);
+    }
+    expect(completionsAt('  pixels = Breathe ').map((c) => c.label)).toContain('warm white');
     // never the levels of an output
     expect(first.map((c) => c.label)).not.toContain('on');
   });

@@ -4,6 +4,7 @@
 // and the settings that may stand for a time (SS-G6). The names come from terms.ts (the board, else the defaults).
 import { getTerms, outputDims, shown, Term, Terms } from './terms';
 import { NO_COLOUR, PIXEL_COLOURS, PIXEL_EFFECTS } from './words';
+import { FleetBoard, getFleet, tellCompletions } from './fleet';
 
 export interface Completion {
   label: string;
@@ -32,6 +33,7 @@ export function lineStarts(): Completion[] {
     line('flicker', 'flicker ${1:out1} for ${2:3}', 'flicker like a failing bulb'),
     line('pulse', 'pulse ${1:cc1} for ${2:200 ms}', 'on now, off after a time'),
     line('limit', 'limit ${1:3} runs per ${2:3 min}', 'at most this many runs in a time'),
+    line('tell', 'tell ', 'tell another board to start an effect or use a setting', true),
     line('audio_single', 'audio_single = ', 'play a sound once', true),
     line('audio_loop', 'audio_loop = ', 'play a sound over and over', true),
     line('audio_loop = off', 'audio_loop = off', 'end the background sound'),
@@ -103,11 +105,14 @@ export function pixelColours(): Completion[] {
 }
 
 /** What fits after `before` (the line up to the cursor). */
-export function completionsAt(before: string, terms: Terms = getTerms()): Completion[] {
+export function completionsAt(before: string, terms: Terms = getTerms(), fleet: FleetBoard[] = getFleet()): Completion[] {
   const b = before.replace(/[\t  ]/g, ' ');
   if (b.includes('#')) return [];
   let m: RegExpExecArray | null;
 
+  // tell <board> <effect>: the boards Studio knows and all, then that board's effects (fleet.ts)
+  const tell = tellCompletions(b, fleet);
+  if (tell) return tell;
   // sounds
   if ((m = /^\s*audio_(single|loop)\s*[=:]\s*(\S*)$/i.exec(b))) {
     const loop = m[1].toLowerCase() === 'loop';

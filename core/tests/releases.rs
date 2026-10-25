@@ -128,6 +128,25 @@ async fn github_releases_default_source() {
         { "fw": "generic", "impl": "cpp", "mcu": "esp32-devkit", "file": "generic-esp32-devkit-0.4.0.bin", "bytes": 4, "sha256": "bb" } ] });
     assert_eq!(fleet::image_for(&rel, &info).unwrap()["file"], "generic-esp32-devkit-0.4.0.bin");
 
+    // with the bare devkits (the firmware's BARE-DEVKIT.md), as release.py writes them: the Proptroller board's entry
+    // first for each mcu, each image naming the board it starts on. A bare ESP32 DevKit gets the bare image, a
+    // Proptroller board (or one from before the field) the Proptroller one; the S3 and C3 their own
+    let e = |mcu: &str, board: &str, file: &str, first: bool| json!({ "fw": "generic", "impl": "cpp", "mcu": mcu, "board": board, "file": file, "bytes": 4, "sha256": "aa", "first_flash": first });
+    let rel = json!({ "version": "0.5.0", "images": [
+        e("esp32-devkit", "proptroller", "generic-esp32-devkit-0.5.0.bin", false),
+        e("esp32-devkit", "esp32-devkit-bare", "generic-esp32-devkit-bare-0.5.0.bin", false),
+        e("esp32-s3", "esp32-s3-devkit", "generic-esp32-s3-devkit-0.5.0.bin", false),
+        e("esp32-c3", "esp32-c3-supermini", "generic-esp32-c3-supermini-0.5.0.bin", false),
+        e("esp32-devkit", "proptroller", "first-flash-esp32-devkit-0.5.0.bin", true),
+        e("esp32-devkit", "esp32-devkit-bare", "first-flash-esp32-devkit-bare-0.5.0.bin", true) ] });
+    let board = |mcu: &str, b: &str| json!({ "fw": "generic", "fw_impl": "cpp", "mcu": mcu, "board": b });
+    let file = |i: Value| fleet::image_for(&rel, &i).map(|x| x["file"].as_str().unwrap_or("").to_string());
+    assert_eq!(file(board("esp32-devkit", "proptroller")).as_deref(), Some("generic-esp32-devkit-0.5.0.bin"));
+    assert_eq!(file(info.clone()).as_deref(), Some("generic-esp32-devkit-0.5.0.bin"));
+    assert_eq!(file(board("esp32-devkit", "esp32-devkit-bare")).as_deref(), Some("generic-esp32-devkit-bare-0.5.0.bin"));
+    assert_eq!(file(board("esp32-s3", "esp32-s3-devkit")).as_deref(), Some("generic-esp32-s3-devkit-0.5.0.bin"));
+    assert_eq!(file(board("esp32-c3", "esp32-c3-supermini")).as_deref(), Some("generic-esp32-c3-supermini-0.5.0.bin"));
+
     // nothing published yet / too many checks: plain words, remembered for a few minutes like a release
     assert_eq!(fleet::manifest("https://github.com/someone/empty/releases").await.unwrap_err(), fleet::NO_RELEASE);
     while seen.try_recv().is_ok() {}
