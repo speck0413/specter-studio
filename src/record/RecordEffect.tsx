@@ -426,7 +426,7 @@ export default function RecordEffect({ b, onSave, onClose }: { b: Board; onSave:
                 <MenuItem key={i} value={i.toLowerCase()} disabled={!inputOk(i)}>
                   {labels[i.toLowerCase()] ? `${labels[i.toLowerCase()]} (${i})` : i}{inputWhy(i) ? ` — ${inputWhy(i)}` : inputOk(i) && heldNow(i) ? ' — reads pressed right now' : ''}
                 </MenuItem>))}
-              <MenuItem value="boot" disabled>When the board starts — not possible yet: an effect always waits for an input</MenuItem>
+              <MenuItem value="boot" disabled>When the board starts — not in Record effect yet: write it in the script (lines above the first “wait for”)</MenuItem>
             </TextField>
             <FormControlLabel control={<Checkbox checked={countIn} onChange={(e) => setCountIn(e.target.checked)} />} label="Count 3, 2, 1 first" />
           </Stack>

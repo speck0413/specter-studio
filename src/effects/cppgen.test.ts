@@ -48,6 +48,14 @@ describe('effect script to C++', () => {
     expect(scriptToCpp('effect x:\n  out1 = on\n')).toContain('has no "wait for" line');
   });
 
+  it('the rainy porch: lines above the first wait for and an effect with no wait for stay as comments', () => {
+    const cpp = scriptToCpp(fs.readFileSync(path.join(EX, '10_rainy_porch.txt'), 'utf8'));
+    expect(cpp).toContain('// not available in the C++ beginner layer (above the first wait for): audio_loop = 1');
+    expect(cpp).toContain('// not available in the C++ beginner layer (above the first wait for): out1 = 15%');
+    expect(cpp).toContain('.playSound(2)\n      .turnOn(OUT1)\n      .wait(seconds(4))');
+    expect(cpp).toContain('  // effect candle\n  // this effect has no "wait for" line: on the board it goes round and round from power-on');
+  });
+
   it('reads effect headers as the board does', () => {
     expect(effectName('effect1:')).toBe('effect1');
     expect(effectName('effect Big   Scary  Ghost:')).toBe('big scary ghost');

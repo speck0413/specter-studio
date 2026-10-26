@@ -625,8 +625,9 @@ trigger; on a practice board "hold Press on TRIG1" tries it.
   mid-hold leaves nothing on (firmware before 0.1.0-rc.1: until the maximum on-time, STOP or a restart). Closing
   the recorder while the board is offline drops the "let go when it is back" step.
 
-**Not possible yet.** "When the board starts" is listed but disabled: every effect starts with `wait for` an
-input.
+**Not possible yet.** "When the board starts" is listed but disabled: a recorded effect always starts with
+`wait for` an input. A script may do it by hand (lines above an effect's first `wait for` run at power-on; an
+effect with no `wait for` goes round from power-on).
 
 ## Done (and how it is checked)
 

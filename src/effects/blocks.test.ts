@@ -150,3 +150,44 @@ describe('the block for a line (a clicked checker message)', () => {
     expect(blockIdForLine(ws, 99)).toBeNull();
   });
 });
+
+// An effect may start with any line (SHOW-SCRIPT.md SS-R1): lines above its first "wait for" (a background sound),
+// several "wait for" lines, or none at all (it goes round by itself). The blocks hold any of them.
+describe('effects that do not start with a wait for', () => {
+  const AMBIENT = 'effect haunt:\n  audio_loop = 1\n  out1 = 15%\n  wait for trig1\n  audio_single = 2\n  out1 = on\n  wait 5\n\neffect candle:\n  out2 = 40%\n  flicker out2 for 3\n  wait 1\n';
+  it('the ambient example goes text -> blocks -> text unchanged, its lines in order', () => {
+    const ws = new Blockly.Workspace();
+    textToBlocks(ws, AMBIENT);
+    expect(ws.getAllBlocks(true).map((b) => b.type)).toEqual(['ps_effect', 'ps_audio_loop', 'ps_set', 'ps_wait', 'ps_audio_single', 'ps_set', 'ps_sleep',
+      'ps_effect', 'ps_set', 'ps_flicker', 'ps_sleep']);
+    expect(blocksToText(ws)).toBe(AMBIENT);
+    ws.dispose();
+  });
+  it('an effect built from blocks needs no wait for block', () => {
+    const ws = new Blockly.Workspace();
+    const e = ws.newBlock('ps_effect');
+    e.setFieldValue('candle', 'NAME');
+    const set = ws.newBlock('ps_set');
+    set.setFieldValue('out2', 'TARGET');
+    set.setFieldValue('on', 'LEVEL');
+    const fl = ws.newBlock('ps_flicker');
+    fl.setFieldValue('out2', 'TARGET');
+    e.getInput('LINES')!.connection!.connect(set.previousConnection!);
+    set.nextConnection!.connect(fl.previousConnection!);
+    expect(blocksToText(ws)).toBe('effect candle:\n  out2 = on\n  flicker out2 for 3\n');
+    ws.dispose();
+  });
+  it('a wait for block moved below the lines: they become the lines above it', () => {
+    const ws = new Blockly.Workspace();
+    textToBlocks(ws, 'effect haunt:\n  wait for trig1\n  audio_loop = 1\n');
+    const wait = ws.getAllBlocks(true).find((b) => b.type === 'ps_wait')!;
+    const loop = ws.getAllBlocks(true).find((b) => b.type === 'ps_audio_loop')!;
+    const effect = ws.getAllBlocks(true).find((b) => b.type === 'ps_effect')!;
+    loop.unplug();
+    wait.unplug();
+    effect.getInput('LINES')!.connection!.connect(loop.previousConnection!);
+    loop.nextConnection!.connect(wait.previousConnection!);
+    expect(blocksToText(ws)).toBe('effect haunt:\n  audio_loop = 1\n  wait for trig1\n');
+    ws.dispose();
+  });
+});

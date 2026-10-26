@@ -105,7 +105,7 @@ describe('Studio reads every golden script as the board does', () => {
     const count = (cpp.match(/^ {2}\/\/ effect /gm) || []).length;
     if (count !== effects.length) wrong.push(`${effects.length} effects for the board, ${count} in the C++`);
     const whens = [...cpp.matchAll(/prop\.when\((\w+)\)/g)].map((m) => m[1]);
-    // an effect's trigger is its first wait for (sound lines may come before it)
+    // an effect's trigger is its first wait for (any line may come before it; an effect with none has no trigger)
     const firsts = effects.map((e) => e.steps.find((s) => s.op === 'wait_for')?.input).filter(Boolean);
     if (JSON.stringify(whens) !== JSON.stringify(firsts)) wrong.push(`triggers ${firsts} for the board, ${whens} in the C++`);
     for (const e of effects) for (const s of e.steps) {

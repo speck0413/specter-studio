@@ -15,7 +15,7 @@ const COLOURS = { effect: 30, wait: 200, set: 120, time: 260, sound: 330, pixels
 const defs = [
   { type: 'ps_effect', message0: 'effect %1 :', args0: [{ type: 'field_input', name: 'NAME', text: 'my effect' }],
     message1: '%1', args1: [{ type: 'input_statement', name: 'LINES' }], previousStatement: null, nextStatement: null, colour: COLOURS.effect,
-    tooltip: 'An effect: its lines run top to bottom, then it starts again at its first "wait for".' },
+    tooltip: 'An effect: its lines run top to bottom, then again from the top. The lines above its first "wait for" run at power-on.' },
   { type: 'ps_wait', message0: 'wait for %1', args0: [{ type: 'field_ps_choice', name: 'INPUT', kind: 'input', text: 'trig1' }], previousStatement: null, nextStatement: null, colour: COLOURS.wait,
     tooltip: 'Waits until the input is pressed (held for the debounce time), after it was released.' },
   { type: 'ps_set', message0: '%1 = %2', args0: [{ type: 'field_ps_choice', name: 'TARGET', kind: 'output', text: 'out1' }, { type: 'field_ps_choice', name: 'LEVEL', kind: 'level', text: 'on' }], previousStatement: null, nextStatement: null, colour: COLOURS.set,
@@ -33,7 +33,7 @@ const defs = [
   { type: 'ps_audio_single', message0: 'play sound %1 once', args0: [{ type: 'field_ps_choice', name: 'SOUND', kind: 'sound', text: '1' }], previousStatement: null, nextStatement: null, colour: COLOURS.sound,
     tooltip: 'Plays sound N once: the one file in the card\'s folder NN (NN/001-….mp3).' },
   { type: 'ps_audio_loop', message0: 'play sound %1 over and over', args0: [{ type: 'field_ps_choice', name: 'SOUND', kind: 'loop', text: '1' }], previousStatement: null, nextStatement: null, colour: COLOURS.sound,
-    tooltip: 'Plays a sound over and over, until another sound line.' },
+    tooltip: 'Plays a sound over and over in the background; a sound played once over it comes back to it, and the sound that already loops carries on.' },
   { type: 'ps_audio_stop', message0: 'stop the sound', previousStatement: null, nextStatement: null, colour: COLOURS.sound, tooltip: 'Stops the sound.' },
   { type: 'ps_audio_volume', message0: 'sound volume %1', args0: [{ type: 'field_ps_choice', name: 'VOLUME', kind: 'volume', text: '60%' }], previousStatement: null, nextStatement: null, colour: COLOURS.sound,
     tooltip: 'How loud the script\'s sounds play from here on: 0% (silent) to 100%.' },

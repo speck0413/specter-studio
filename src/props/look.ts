@@ -186,12 +186,13 @@ export function settingNames(text: string): string[] {
   return [...out];
 }
 
-/** How long a run of the effect takes, in ms, from the line after its first `wait for` to its last line: the
- * sleeps, fades and flickers one after another, and a pulse that outlasts them. null when it cannot be known
- * (another `wait for` part way, a setting the board did not give, no such effect). */
+/** How long a run of the effect takes, in ms, from the line after its first `wait for` to its last line and on
+ * through the lines above that `wait for` (they run again before it waits): the sleeps, fades and flickers one
+ * after another, and a pulse that outlasts them. null when it cannot be known (another `wait for` part way, a
+ * setting the board did not give, no such effect, an effect with no `wait for`: it goes round by itself). */
 export function runLengthMs(text: string | undefined, effect: string, settings: Record<string, number> = {}): number | null {
   const lines = split(text || '');
-  let inside = false, started = false, waited = false, t = 0, end = 0;
+  let inside = false, started = false, waited = false, t = 0, end = 0, above = 0, aboveEnd = 0;
   for (const [raw] of lines) {
     const n = effectName(raw);
     if (n !== null) {
@@ -207,6 +208,7 @@ export function runLengthMs(text: string | undefined, effect: string, settings: 
     if (/^wait\s*for\b/.test(b)) {
       if (waited) return null; // a press part way: how long it waits cannot be known
       waited = true;
+      above = t; aboveEnd = end; // the lines above it, run again after the last line
       t = 0; end = 0; // the run starts when it leaves its first wait for
       continue;
     }
@@ -223,6 +225,6 @@ export function runLengthMs(text: string | undefined, effect: string, settings: 
     if (d === null) return null;
     t += d;
   }
-  if (!started) return null;
-  return Math.max(t, end);
+  if (!started || !waited) return null;
+  return Math.max(t + above, end, t + aboveEnd);
 }

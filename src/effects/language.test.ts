@@ -40,6 +40,16 @@ describe('effect script language helpers', () => {
   });
 });
 
+describe('help for effects that do not start with a wait for', () => {
+  it('says a wait for may stand anywhere and what the lines above it do', () => {
+    const w = hoverFor('wait') ?? '';
+    expect(w).not.toMatch(/first line of every effect/i);
+    expect(w).toMatch(/anywhere/);
+    expect(w).toMatch(/power-on/);
+    expect(hoverFor('audio_loop')).toMatch(/carries on/);
+  });
+});
+
 describe('typing line by line never makes a staircase', () => {
   it('a line is indented two spaces at most', () => {
     expect(indentFix('    ')).toBe('  ');

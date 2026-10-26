@@ -4,8 +4,8 @@
 // A `pixels` line is the library's pixel step (setPixels, chasePixels, ...); comet, sparkle, breathe and fire have
 // none, and pixel_speed is not applied (the steps take the effects' own times).
 // Lines the beginner layer has no step for (flicker, DMX, looping a named sound, a second wait for, the advanced
-// lines: limit, pulse, a time kept as a setting, a sound line above the first wait for, a `tell` line to another
-// board) become comments, so nothing is silently dropped.
+// lines: limit, pulse, a time kept as a setting, a line above the first wait for, a `tell` line to another
+// board) become comments, so nothing is silently dropped; an effect with no wait for has no trigger there.
 
 import { colourHex, splitPixels } from './words';
 
@@ -115,7 +115,7 @@ export function scriptToCpp(text: string): string {
   const flush = () => {
     if (!name) return;
     out.push(`  // effect ${name}`);
-    if (!input) out.push(`  // this effect has no "wait for" line, so it has no trigger here`);
+    if (!input) out.push(`  // this effect has no "wait for" line: on the board it goes round and round from power-on; the beginner layer has no step for that`);
     else {
       const end = chain.length && chain[chain.length - 1].startsWith('//') ? '\n      ;' : ';';
       out.push(`  prop.when(${input})${chain.length ? '\n      ' + chain.join('\n      ') : ''}${end}`);
@@ -138,7 +138,7 @@ export function scriptToCpp(text: string): string {
       input = w[1].toUpperCase();
       continue;
     }
-    // a sound line above the first wait for runs at power-on and at each return to the top, not at the trigger
+    // a line above the first wait for runs at power-on and at each return to the top, not at the trigger
     if (!input) {
       chain.push(`// not available in the C++ beginner layer (above the first wait for): ${line}`);
       continue;

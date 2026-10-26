@@ -70,6 +70,8 @@ describe('the picker writes only its own lines', () => {
 describe('how long a run takes', () => {
   const s = 'effect scare:\n  audio_loop = 1\n  wait for trig1\n  limit 3 runs per 3 min\n  pulse cc1 for 200 ms\n  out1 = on\n  sleep 2.5\n  fade out1 to 0% over 500 ms\n  flicker out2 for 1 min\n  out2 = off\n\neffect b:\n  wait for trig2\n  sleep out1_on_ms\n  pulse rly1 for 10\n';
   it('sums sleeps, fades and flickers after the first wait for', () => expect(runLengthMs(s, 'scare')).toBe(2500 + 500 + 60000));
+  it('the lines above the first wait for run again at the end of a run', () =>
+    expect(runLengthMs('effect a:\n  out1 = 20%\n  sleep 1\n  wait for trig1\n  out1 = on\n  sleep 2\n', 'a')).toBe(3000));
   it('a pulse that outlasts the lines counts; settings come from the board', () => {
     expect(runLengthMs(s, 'b', { out1_on_ms: 3000 })).toBe(13000);
     expect(runLengthMs(s, 'b', { out1_on_ms: 12000 })).toBe(12000 + 10000);
@@ -78,6 +80,7 @@ describe('how long a run takes', () => {
     expect(runLengthMs(s, 'b')).toBeNull();
     expect(runLengthMs('effect a:\n  wait for trig1\n  sleep 1\n  wait for trig2\n  sleep 1\n', 'a')).toBeNull();
     expect(runLengthMs(s, 'nope')).toBeNull();
+    expect(runLengthMs('effect candle:\n  out1 = 40%\n  flicker out1 for 3\n', 'candle')).toBeNull(); // no wait for: never started
     expect(runLengthMs(undefined, 'a')).toBeNull();
   });
   it('times and units', () => {
