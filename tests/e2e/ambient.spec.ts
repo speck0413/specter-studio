@@ -69,6 +69,9 @@ test('the board checks an effect that does not start with a wait for, and one th
   // with no wait for and no time it would repeat without a pause: the board says so
   await typeScript(NO_TIME);
   await expect(page.getByTestId('check')).toContainText('line 1: effect "candle" never waits, so it would repeat without a pause. Add a "wait 5" or a "wait for trig1".', { timeout: 10_000 });
+  // a limit counts runs, and an effect with no wait for has none
+  await typeScript('effect candle:\n  limit 3 runs per 1 min\n  out2 = 40%\n  flicker out2 for 3\n');
+  await expect(page.getByTestId('check')).toContainText('line 2: a limit counts runs, and effect "candle" has no "wait for" to start one. Add a "wait for trig1", or remove the limit.', { timeout: 10_000 });
   // the ambient example: lines above the wait for, and a candle with no wait for that takes time
   await typeScript(AMBIENT);
   await expect.poll(text).toContain('effect candle:');
